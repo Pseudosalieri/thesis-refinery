@@ -1,0 +1,8 @@
+# 缩略语
+
+| 缩略语 | 英文全称 | 中文全称 |
+| --- | --- | --- |
+| SRC | Synthetic Response Calibration | 合成响应标定流程 |
+| pu | placeholder unit | 占位单位 |
+| E-1 至 E-5 | example specimens 1 to 5 | 示例试样 1 至 5 |
+| L / M / H | low / medium / high perturbation | 低 / 中 / 高扰动 |

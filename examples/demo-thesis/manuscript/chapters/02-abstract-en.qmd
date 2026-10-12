@@ -1,0 +1,7 @@
+# Abstract
+
+This document is a demonstration. It reports a robustness study of a measurement procedure that does not exist, on specimens that do not exist, and it reports numbers that were chosen in advance to be obviously arbitrary.
+
+Under three perturbation levels (0.5, 1.0 and 2.0 placeholder units), five example specimens E-1 to E-5 produced 15 response values, all between 99.8 and 103.6 placeholder units. The level means were 100.1, 101.6 and 103.2 placeholder units, so the response rose monotonically with perturbation. Every specimen spanned 3.1 placeholder units across the three levels; E-2 spanned 3.2.
+
+**Keywords**: synthetic example; robustness; placeholder data; pipeline demonstration

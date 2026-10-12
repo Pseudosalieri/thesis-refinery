@@ -1,0 +1,37 @@
+---
+title: "示例学位论文：一种合成测量流程的稳健性研究"
+---
+
+<!--
+  Front matter comes first, then the body. The boundary between them is the
+  first level-1 heading, and the formatting stage finds it by style rather than
+  by counting pages.
+
+  The sources deliberately contain no page-number directives. Roman front matter
+  and arabic body numbering require a *section break* between the two, and a
+  section break is a property of the document rather than of the markdown: the
+  formatting stage sets `w:pgNumType` per section, and `verify` checks that the
+  format changes at most once and restarts at 1 when it does.
+
+  A project that needs more than one section inserts the breaks in the imported
+  front matter, which is where they belong -- the front matter is copied
+  byte-for-byte precisely so that its section properties survive.
+-->
+
+{{< include chapters/01-abstract-cn.qmd >}}
+
+{{< include chapters/02-abstract-en.qmd >}}
+
+{{< include chapters/08-abbreviations.qmd >}}
+
+{{< include chapters/03-introduction.qmd >}}
+
+{{< include chapters/04-method.qmd >}}
+
+{{< include chapters/05-results.qmd >}}
+
+{{< include chapters/06-conclusion.qmd >}}
+
+{{< include chapters/07-references.qmd >}}
+
+{{< include chapters/09-acknowledgements.qmd >}}

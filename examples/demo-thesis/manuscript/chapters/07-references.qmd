@@ -1,0 +1,19 @@
+# 参考文献
+
+[1] Example A, Sample B. Robustness of a procedure that does not exist[J]. Journal of Synthetic Examples, 2020, 12(3): 45-58. DOI: 10.0000/example.0001.
+
+[2] Placeholder C. A survey of fabricated measurement procedures[J]. Journal of Synthetic Examples, 2021, 13(1): 1-19. DOI: 10.0000/example.0002.
+
+[3] Demonstration D, Example A. Building a thesis from markdown sources: a synthetic walkthrough[J]. Placeholder Reports, 2021, 7(2): 88-95. DOI: 10.0000/example.0003.
+
+[4] Sample B. Dividing a placeholder material into five example specimens[J]. Journal of Synthetic Examples, 2022, 14(4): 200-207. DOI: 10.0000/example.0004.
+
+[5] Placeholder C, Specimen E. Definitions of arbitrary stability indices[J]. Annals of Fabricated Measurement, 2022, 3(1): 10-22. DOI: 10.0000/example.0005.
+
+[6] Specimen E. Placeholder units, and how to avoid needing them[J]. Annals of Fabricated Measurement, 2022, 3(2): 23-30. DOI: 10.0000/example.0006.
+
+[7] Example A. Monotonicity criteria for synthetic responses[J]. Placeholder Reports, 2023, 9(1): 5-14. DOI: 10.0000/example.0007.
+
+[8] Demonstration D. On the difference between a demonstration and a result[J]. Journal of Synthetic Examples, 2023, 15(2): 61-70. DOI: 10.0000/example.0008.
+
+[9] Sample B, Placeholder C. Recounting numbers that were chosen in advance[J]. Proceedings of the Fictional Measurement Society, 2024, 2(1): 33-40. DOI: 10.0000/example.0009.

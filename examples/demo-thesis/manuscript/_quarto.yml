@@ -1,0 +1,35 @@
+# =============================================================================
+# demo-thesis — Quarto project
+#
+# Rendered with:  quarto render index.qmd --to docx --resource-path=chapters
+#
+# `--resource-path=chapters` is not optional. Chapter files refer to their
+# figures as `raw/media/...`, which is relative to the chapter directory, and
+# without the resource path pandoc silently replaces every figure with its alt
+# text. The build command adds it; if you render by hand, add it too.
+# =============================================================================
+
+project:
+  type: default
+  output-dir: _outputs
+  render:
+    - index.qmd
+
+format:
+  docx:
+    toc: true
+    toc-title: 目录
+    number-sections: false
+    toc-depth: 3
+    # The single source of truth for this value is thesis.yml's reference_docx.
+    # Quarto cannot read YAML from here, so this is a mirror, and the build
+    # asserts that the two resolve to the same file rather than trusting it.
+    reference-doc: reference.docx
+
+  pdf:
+    # Not used by the default build. docx is what the gates check, and PDF would
+    # additionally require the fonts to be installed on the build machine.
+    pdf-engine: xelatex
+    toc: true
+    number-sections: false
+    toc-depth: 3
