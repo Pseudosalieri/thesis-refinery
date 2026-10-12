@@ -129,13 +129,26 @@ _AFTER_STYLE_PARAGRAPH_PROPERTIES = ("w:rPr", "w:tblPr", "w:trPr", "w:tcPr", "w:
 # ---------------------------------------------------------------------------
 
 
-def apply(source: Path, destination: Path, *, style: StyleSpec) -> Path:
+def apply(
+    source: Path,
+    destination: Path,
+    *,
+    style: StyleSpec,
+    options: Mapping[str, object] | None = None,
+) -> Path:
     """Read *source*, apply the style specification, write *destination*.
 
     Every value comes from *style*: this module contains no millimetre, point size,
     style name or border size. *source* is opened read-only and never written —
     :meth:`Package.save` refuses a destination that is its own input, and this
     stage relies on that refusal rather than working around it.
+
+    *options* is part of the uniform stage protocol — every stage takes
+    ``(source, destination, *, style, options)`` so the pipeline can call them the
+    same way. This stage has nothing to configure beyond the specification, so it
+    accepts the mapping and ignores it. Refusing the parameter would make the stage
+    interface two interfaces and the orchestrator would have to know which was
+    which.
 
     Returns *destination*.
     """

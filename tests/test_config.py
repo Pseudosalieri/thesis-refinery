@@ -270,6 +270,49 @@ def test_profiles_are_read(tmp_path: Path) -> None:
     assert load(tmp_path).profiles == ("chemistry",)
 
 
+# ---------------------------------------------------------------------------
+# Stage options
+# ---------------------------------------------------------------------------
+
+
+def test_stage_options_default_to_empty(tmp_path: Path) -> None:
+    write_config(tmp_path, MINIMAL)
+    assert load(tmp_path).stages == {}
+
+
+def test_stage_options_are_read_verbatim(tmp_path: Path) -> None:
+    """The content is the stage's business; config checks only the shape.
+
+    A config module that knew every stage's option names would have to be edited
+    every time a stage gained one — knowledge that belongs with the code that reads
+    it. The stage *names* are checked once per build instead, by the one module that
+    knows the stage table.
+    """
+    write_config(
+        tmp_path,
+        MINIMAL + "\nstages:\n  references:\n    et_al: true\n    expect_entries: 46\n",
+    )
+    assert load(tmp_path).stages == {"references": {"et_al": True, "expect_entries": 46}}
+
+
+def test_a_stage_section_with_no_options_is_accepted(tmp_path: Path) -> None:
+    write_config(tmp_path, MINIMAL + "\nstages:\n  references:\n")
+    assert load(tmp_path).stages == {"references": {}}
+
+
+def test_a_bare_scalar_where_stage_options_are_expected_is_refused(tmp_path: Path) -> None:
+    """A scalar configures nothing and says nothing, which is the worst of both."""
+    write_config(tmp_path, MINIMAL + "\nstages:\n  references: true\n")
+    with pytest.raises(ConfigError, match=r"stages\.references"):
+        load(tmp_path)
+
+
+def test_a_bare_scalar_where_the_stage_table_is_expected_is_refused(tmp_path: Path) -> None:
+    write_config(tmp_path, MINIMAL + "\nstages: references\n")
+    with pytest.raises(ConfigError, match="stages"):
+        load(tmp_path)
+
+
 def test_a_bare_string_profile_is_refused(tmp_path: Path) -> None:
     write_config(tmp_path, MINIMAL + "\nprofiles: chemistry\n")
     with pytest.raises(ConfigError, match="profiles"):

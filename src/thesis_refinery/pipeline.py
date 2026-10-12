@@ -237,7 +237,24 @@ def run_stage(stage: Stage, source: Path, destination: Path, config: Config) -> 
         ) from exc
 
     apply_stage: Callable[..., Path] = getattr(module, stage.function)
-    return apply_stage(source, destination, style=config.style)
+    return apply_stage(
+        source,
+        destination,
+        style=config.style,
+        options=config.stages.get(stage.name, {}),
+    )
+
+
+def unknown_stage_options(config: Config) -> tuple[str, ...]:
+    """Stage names in ``thesis.yml`` that no stage answers to.
+
+    Checked here rather than in :mod:`thesis_refinery.config` because this is the
+    one module that knows the stage table. A misspelled name is otherwise a section
+    of the configuration file that quietly configures nothing — the same failure as
+    a misspelled key, one level up.
+    """
+    known = {stage.name for stage in STAGES}
+    return tuple(sorted(set(config.stages) - known))
 
 
 # ---------------------------------------------------------------------------
@@ -262,6 +279,17 @@ def build(
         _log(f"configuration refused: {exc}")
         result.failed_step = "configure"
         result.exit_code = ExitCode.ENVIRONMENT
+        return result
+
+    unknown = unknown_stage_options(config)
+    if unknown:
+        known = ", ".join(stage.name for stage in STAGES)
+        _log(
+            f"configuration refused: thesis.yml configures unknown stage(s) "
+            f"{', '.join(unknown)}; known stages: {known}"
+        )
+        result.failed_step = "configure"
+        result.exit_code = ExitCode.USAGE
         return result
 
     current = config.paths.output_dir / "index.docx"

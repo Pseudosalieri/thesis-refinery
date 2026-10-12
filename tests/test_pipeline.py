@@ -25,6 +25,7 @@ from thesis_refinery.pipeline import (
     resolve_quarto,
     run_stage,
     stages,
+    unknown_stage_options,
 )
 from thesis_refinery.style import DEFAULT_STYLE
 
@@ -247,6 +248,47 @@ def test_every_stage_is_importable_and_exposes_apply() -> None:
 
 def test_the_stages_helper_yields_the_table() -> None:
     assert list(stages()) == list(STAGES)
+
+
+def test_an_unknown_stage_name_stops_the_build_before_rendering(tmp_path: Path) -> None:
+    """A misspelled stage name is a section of the config file that configures nothing.
+
+    Same failure as a misspelled key, one level up — so it is refused the same way,
+    with the known names printed, rather than being ignored.
+    """
+    config = make_config(tmp_path / "project", stages={"reference": {"et_al": True}})
+
+    assert unknown_stage_options(config) == ("reference",)
+
+    result = build(config)
+
+    assert not result.ok
+    assert result.failed_step == "configure"
+    assert result.exit_code == ExitCode.USAGE
+    assert result.steps_run == []
+
+
+def test_a_known_stage_name_is_accepted(tmp_path: Path) -> None:
+    config = make_config(tmp_path / "project", stages={STAGES[0].name: {}})
+    assert unknown_stage_options(config) == ()
+
+
+def test_stage_options_reach_the_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plumbing, asserted rather than assumed: options must arrive as a mapping."""
+    captured: dict[str, object] = {}
+
+    def fake_apply(source, destination, *, style, options=None):
+        captured["options"] = options
+        return destination
+
+    monkeypatch.setattr("thesis_refinery.stages.format.apply", fake_apply)
+    config = make_config(tmp_path / "project", stages={STAGES[0].name: {"anything": 1}})
+    source = tmp_path / "in.docx"
+    source.write_bytes(b"placeholder")
+
+    run_stage(STAGES[0], source, tmp_path / "out.docx", config)
+
+    assert captured["options"] == {"anything": 1}
 
 
 def test_the_product_path_is_named_after_no_stage() -> None:

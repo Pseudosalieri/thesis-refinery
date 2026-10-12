@@ -144,6 +144,21 @@ class Config:
     style: StyleSpec = field(default_factory=StyleSpec)
     tools: Tools = field(default_factory=Tools)
     profiles: tuple[str, ...] = ()
+    stages: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    """Per-stage options, keyed by stage name.
+
+    Deliberately validated for *shape* here and for *content* by each stage. A
+    config module that knew every stage's option names would have to be edited
+    every time a stage gained one, and the knowledge belongs with the code that
+    reads it.
+
+    The stage *names* are checked, once per build, in
+    :func:`thesis_refinery.pipeline.build` — the one place that knows the stage
+    table. A misspelled stage name is otherwise a section of the file that quietly
+    configures nothing, which is the failure mode this project refuses everywhere
+    else.
+    """
+
     reference_docx: Path | None = None
     frontmatter_docx: Path | None = None
     raw: Mapping[str, Any] = field(default_factory=dict)
@@ -226,6 +241,7 @@ _KNOWN_TOP_LEVEL = frozenset(
         "style",
         "profiles",
         "tools",
+        "stages",
         "reference_docx",
         "frontmatter_docx",
     }
@@ -262,6 +278,7 @@ def _build(root: Path, document: Mapping[str, Any]) -> Config:
         style=_build_style(document.get("style", {})),
         tools=_dataclass_from_mapping(Tools, document.get("tools", {}), "tools"),
         profiles=_string_tuple(document.get("profiles", []), "profiles"),
+        stages=_build_stages(document.get("stages", {})),
         reference_docx=_optional_path(root, document.get("reference_docx")),
         frontmatter_docx=_optional_path(root, document.get("frontmatter_docx")),
         raw=document,
@@ -288,6 +305,21 @@ def _build_identity(section: Any) -> Identity:
         required=_string_tuple(mapping.get("required", []), "identity.required"),
         forbidden=_string_tuple(mapping.get("forbidden", []), "identity.forbidden"),
     )
+
+
+def _build_stages(section: Any) -> Mapping[str, Mapping[str, Any]]:
+    """Per-stage options, with the shape checked and the contents left alone.
+
+    Each value must be a mapping, so that a stage receiving it can treat every key
+    as an option it either understands or must refuse. A stage written as a bare
+    scalar would be a section of the file that configures nothing and says nothing.
+    """
+    mapping = _mapping(section, "stages")
+    built: dict[str, Mapping[str, Any]] = {}
+    for name, value in mapping.items():
+        options = _mapping(value, f"stages.{name}")
+        built[str(name)] = dict(options)
+    return built
 
 
 def _build_checks(section: Any) -> Checks:
