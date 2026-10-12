@@ -91,7 +91,7 @@ SUBCOMMANDS: tuple[Command, ...] = (
     Command("build", "render, apply the style, and run the gates",
             "thesis_refinery.commands.build:run", _add_build_args),
     Command("verify", "run the gates; non-zero exit when the document drifts",
-            "thesis_refinery.commands.verify:run", _add_verify_args),
+            "thesis_refinery.verify.gate:main", _add_verify_args),
     Command("audit", "print a human-readable format report; never fails",
             "thesis_refinery.commands.audit:run", _add_audit_args),
     Command("ledger", "build or verify the hash inventory of tracked files",

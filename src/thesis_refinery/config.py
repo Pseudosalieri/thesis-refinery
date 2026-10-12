@@ -83,6 +83,16 @@ class ProjectPaths:
     def index_source(self) -> Path:
         return self.thesis_dir / "index.qmd"
 
+    @property
+    def final_docx(self) -> Path:
+        """The finished product of a build.
+
+        Named in exactly one place, because "which file do the gates check" is
+        otherwise answered separately by the build, the gate and the
+        documentation, and those three answers drift apart.
+        """
+        return self.output_dir / "index-final.docx"
+
 
 @dataclass(frozen=True)
 class Identity:

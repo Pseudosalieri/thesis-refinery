@@ -97,8 +97,10 @@ SCHEMA_ORDER: dict[str, tuple[str | tuple[str, ...], ...]] = {
         "rtl", "cs", "em", "lang", "eastAsianLayout", "specVanish", "oMath",
         "rPrChange",
     ),
-    # CT_SectPr
+    # CT_SectPr. Header and footer references come first as a group: a section
+    # may carry any number of them, in any order, before any other property.
     "sectPr": (
+        ("headerReference", "footerReference"),
         "footnotePr", "endnotePr", "type", "pgSz", "pgMar", "paperSrc", "pgBorders",
         "lnNumType", "pgNumType", "cols", "formProt", "vAlign", "noEndnote",
         "titlePg", "textDirection", "bidi", "rtlGutter", "docGrid", "printerSettings",
