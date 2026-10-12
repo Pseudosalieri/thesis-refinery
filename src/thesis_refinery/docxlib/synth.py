@@ -20,10 +20,22 @@ import zipfile
 from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
+from lxml import etree
+
 from thesis_refinery.docxlib import units
 from thesis_refinery.docxlib.ns import CONTENT_TYPE, NSMAP, RELTYPE
-from thesis_refinery.docxlib.parse import DECLARATION
-from thesis_refinery.docxlib.xmlq import Element
+from thesis_refinery.docxlib.parse import DECLARATION, parse
+from thesis_refinery.docxlib.xmlq import Element, new, ordered_insert
+
+_ZIP_TIMESTAMP = (1980, 1, 1, 0, 0, 0)
+"""A fixed member timestamp, so two builds of the same inputs are byte-identical.
+
+The zip format stores a modification time per member. Stamping the wall clock
+makes the archive differ between two runs of the same code on the same inputs,
+which defeats the "did this stage change anything?" question the whole pipeline
+is built around -- and makes a committed generated asset impossible to verify
+against its generator.
+"""
 
 __all__ = [
     "DOCUMENT_NAMESPACES",
@@ -299,6 +311,13 @@ def style_xml(
     ``'<w:ind w:firstLine="480"/>'``. Raw fragments are the honest choice here:
     a typed builder for every formatting property would be a second, subtly
     different model of the same schema.
+
+    *outline_level* is the exception, and it is inserted in schema order rather
+    than concatenated. ``w:outlineLvl`` must come **after** ``w:spacing``,
+    ``w:ind`` and ``w:jc``, so prefixing it -- the obvious implementation --
+    produces a schema-invalid style whenever the fragment names any of those.
+    Word's response is "the file is corrupt", which is a memorable way to learn
+    that a string template is the wrong tool for a sequence-typed element.
     """
     attributes = f'w:type="paragraph" w:styleId="{style_id}"'
     if default:
@@ -309,14 +328,25 @@ def style_xml(
     if next_style:
         parts.append(f'<w:next w:val="{next_style}"/>')
     parts.append("<w:qFormat/>")
-    if outline_level is not None:
-        paragraph_properties = f'<w:outlineLvl w:val="{outline_level}"/>' + paragraph_properties
-    if paragraph_properties:
-        parts.append(f"<w:pPr>{paragraph_properties}</w:pPr>")
+    placed = _ordered_paragraph_properties(paragraph_properties, outline_level)
+    if placed:
+        parts.append(f"<w:pPr>{placed}</w:pPr>")
     if run_properties:
         parts.append(f"<w:rPr>{run_properties}</w:rPr>")
     body = "\n".join(parts)
     return f"<w:style {attributes}>\n{body}\n</w:style>"
+
+
+def _ordered_paragraph_properties(fragment: str, outline_level: int | None) -> str:
+    """*fragment* with ``w:outlineLvl`` inserted where CT_PPr requires it."""
+    if outline_level is None:
+        return fragment
+
+    wrapper = parse(part_xml(root="w:pPr", namespaces={"w": W}, body=fragment or ""))
+    ordered_insert(wrapper, new("w:outlineLvl", **{"w:val": str(outline_level)}))
+
+    serialised = etree.tostring(wrapper, encoding="unicode")
+    return serialised[serialised.index(">") + 1 : serialised.rindex("</")]
 
 
 def styles_xml(styles: Iterable[str]) -> str:
@@ -427,9 +457,13 @@ def build_docx(
     }
 
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as archive:
-        # [Content_Types].xml first: some strict readers require it.
+        # [Content_Types].xml first: some strict readers require it. Members carry
+        # a fixed timestamp rather than the wall clock, so that generating the
+        # same document twice produces the same bytes.
         for name in ("[Content_Types].xml", "_rels/.rels", *parts):
-            archive.writestr(name, package[name])
+            info = zipfile.ZipInfo(name, date_time=_ZIP_TIMESTAMP)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            archive.writestr(info, package[name])
 
     return path
 
