@@ -193,7 +193,7 @@ def _in_hyperlink(run: Element) -> bool:
     """True when the run sits inside a ``w:hyperlink``."""
     parent = run.getparent()
     while parent is not None:
-        if parent.tag == q("w:hyperlink"):
+        if parent.tag == q("hyperlink"):
             return True
         parent = parent.getparent()
     return False

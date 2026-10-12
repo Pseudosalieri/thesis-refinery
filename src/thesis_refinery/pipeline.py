@@ -32,7 +32,7 @@ import shutil
 import subprocess
 import sys
 import time
-from collections.abc import Callable, Iterator, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -205,18 +205,36 @@ def _always_enabled(config: Config) -> bool:
     return True
 
 
+def _section_options(name: str) -> Callable[[Config], Mapping[str, object]]:
+    """The default: a stage's options are its ``stages.<name>`` section."""
+
+    def options(config: Config) -> Mapping[str, object]:
+        return config.stages.get(name, {})
+
+    return options
+
+
+def _frontmatter_options(config: Config) -> Mapping[str, object]:
+    """The front-matter stage's input, which is a project-level path.
+
+    The cover is a fact about the project rather than about the stage — and
+    ``verify`` reads the same path to check the imported pages against their source,
+    so it would be wrong to let the two disagree by configuring it twice.
+    """
+    options: dict[str, object] = {}
+    if config.frontmatter_docx is not None:
+        options["source"] = str(config.frontmatter_docx)
+    options.update(config.stages.get("frontmatter", {}))
+    return options
+
+
 def _configured_by_section(name: str) -> Callable[[Config], bool]:
     """A stage that runs exactly when ``thesis.yml`` gives it a ``stages.<name>`` section."""
     return lambda config: name in config.stages
 
 
 def _configured_by_frontmatter(config: Config) -> bool:
-    """The front-matter stage runs when the project names a cover document.
-
-    Its input is a project-level path rather than a stage section, because the
-    cover is a fact about the project — and because ``verify`` needs the same path
-    to check the imported pages against their source.
-    """
+    """The front-matter stage runs when the project names a cover document."""
     return config.frontmatter_docx is not None
 
 
@@ -241,6 +259,7 @@ class Stage:
     module: str
     function: str
     enabled: Callable[[Config], bool] = _always_enabled
+    options: Callable[[Config], Mapping[str, object]] | None = None
 
 
 STAGES: tuple[Stage, ...] = (
@@ -257,6 +276,14 @@ STAGES: tuple[Stage, ...] = (
         module="thesis_refinery.stages.references",
         function="apply",
         enabled=_configured_by_section("references"),
+    ),
+    Stage(
+        name="frontmatter",
+        summary="import the cover document at the top of the body",
+        module="thesis_refinery.stages.frontmatter",
+        function="apply",
+        enabled=_configured_by_frontmatter,
+        options=_frontmatter_options,
     ),
     Stage(
         name="format",
@@ -284,11 +311,12 @@ def run_stage(stage: Stage, source: Path, destination: Path, config: Config) -> 
         ) from exc
 
     apply_stage: Callable[..., Path] = getattr(module, stage.function)
+    supplied = stage.options(config) if stage.options is not None else config.stages.get(stage.name, {})
     return apply_stage(
         source,
         destination,
         style=config.style,
-        options=config.stages.get(stage.name, {}),
+        options=supplied,
     )
 
 
