@@ -28,12 +28,13 @@ thesis-refinery verify -C examples/demo-thesis
 | `verify/` —— 七项检查,每项都有负向测试 | 完成 |
 | `ledger/` —— 哈希基线、清点、逐段比对 | 完成 |
 | `stages/format.py` —— 施加规格 | 完成 |
-| `examples/demo-thesis` —— 合成、可构建、过闸门 | 完成 |
+| `examples/demo-thesis` —— 合成、可构建、**21 项检查 0 跳过** | 完成 |
 | `stages/abbreviations.py` —— 从 markdown 源重建缩略语表 | 完成 |
+| `stages/references.py` —— 著录条目按引用体例转换 | 完成 |
+| `stages/frontmatter.py` —— 封面逐字节导入 | 完成 |
 | `extract-prefix` —— 从既有文档中裁出封面 | 完成 |
 | `profiles/chemistry` —— 题注 run 形态、软件报告项下标 | 可选扩展 |
 | `profiles/chemistry/spectra.py` —— 谱图附录 | 已规划,未落地 |
-| `stages/frontmatter.py` / `references.py` | 已规划,未落地 |
 
 这份清单对工具本身不构成意外:缺失的阶段会**按名字报出来**并中止构建;缺失的
 profile 模块写在正文里说明,而不是挂在 `__all__` 上当作承诺。

@@ -143,7 +143,14 @@ def _fidelity(context: Context, front: list[Element]) -> Iterator[Finding]:
 
     wanted = _source_paragraph_texts(Path(source))
     actual = [text_of(paragraph) for paragraph in front]
+
+    # Blank paragraphs are dropped from **both** sides. The source's blank lines are
+    # spacers that position the cover's text on the page, and the document carries
+    # the section-break paragraph, which is blank by construction. Filtering one
+    # side only compares two different lists and reports every paragraph after the
+    # first blank as a mismatch -- which is exactly what it did.
     wanted = [text for text in wanted if text.strip()]
+    actual = [text for text in actual if text.strip()]
 
     if wanted == actual:
         yield passed(

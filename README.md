@@ -32,12 +32,13 @@ and tested; `extract-prefix` is declared and not yet built.
 | `verify/` — seven checks, each with a negative test | done |
 | `ledger/` — digest baseline, inventory, paragraph diff | done |
 | `stages/format.py` — applies the specification | done |
-| `examples/demo-thesis` — synthetic, buildable, gate-passing | done |
+| `examples/demo-thesis` — synthetic, buildable, **21 checks, 0 skipped** | done |
 | `stages/abbreviations.py` — the abbreviation table, rebuilt from its markdown | done |
+| `stages/references.py` — bibliography entries, converted to the citation style | done |
+| `stages/frontmatter.py` — the cover document, imported byte for byte | done |
 | `extract-prefix` — cut a cover out of an existing document | done |
 | `profiles/chemistry` — caption run shape, software-term subscripts | optional extra |
 | `profiles/chemistry/spectra.py` — a spectra appendix | planned, not present |
-| `stages/frontmatter.py`, `stages/references.py` | planned, not present |
 
 Nothing in that list is a surprise to the tool itself: a stage that is absent is
 reported by name and the build stops there, and a profile module that is absent is

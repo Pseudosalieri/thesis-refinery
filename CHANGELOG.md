@@ -76,17 +76,19 @@ caught a real leak in this project's own documentation twice.
 
 ### Known gaps
 
-- `stages/frontmatter.py` and `stages/references.py` are planned and not present.
-  The pipeline reports an absent stage by name and stops, so a checkout without
-  them fails informatively rather than silently doing less than its author
-  believes.
 - `profiles/chemistry` ships two of its three planned modules: the caption run
   shape and the software-term subscripts. The spectra appendix is named in the
   package docstring and deliberately kept out of `__all__`, because a name in
   `__all__` is a promise and a promise that raises `ModuleNotFoundError` is worse
   than an acknowledged absence.
 - The bundled example is a single section, so per-section page numbering is
-  exercised by the checks and their tests rather than by the example.
+  exercised by the checks and their tests rather than by the example. The
+  chapter-per-section shape that the even-page running head is exact for is
+  likewise covered by tests rather than by the example.
+- The reference stage's conversions mean the built `.docx` and the markdown source
+  differ for bibliography entries, on purpose: the markdown's manual numbering is
+  the truth and the printed entry is a build-time conversion of it. A check that
+  compares the two must ignore the entry lines.
 
 [Unreleased]: https://github.com/OWNER/thesis-refinery/compare/v0.1.0...HEAD
 [0.1.0]: https://github.com/OWNER/thesis-refinery/releases/tag/v0.1.0

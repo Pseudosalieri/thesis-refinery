@@ -231,7 +231,13 @@ def build_conforming(path: Path, *, version: int = 0) -> Path:
     )
 
 
-def make_config(root: Path, *, style: StyleSpec | None = None, checks: Checks | None = None) -> Config:
+def make_config(
+    root: Path,
+    *,
+    style: StyleSpec | None = None,
+    checks: Checks | None = None,
+    frontmatter_docx: Path | None = None,
+) -> Config:
     return Config(
         root=root,
         paths=ProjectPaths(
@@ -243,12 +249,102 @@ def make_config(root: Path, *, style: StyleSpec | None = None, checks: Checks | 
         identity=Identity(),
         checks=checks or Checks(),
         style=style or STYLE,
+        frontmatter_docx=frontmatter_docx,
     )
 
 
 def findings_for(document: Path, config: Config) -> dict[str, tuple[Status, str]]:
     report = evaluate(document, config=config)
     return {finding.check: (finding.status, finding.message) for finding in report.findings}
+
+
+# ---------------------------------------------------------------------------
+# Front-matter fidelity
+# ---------------------------------------------------------------------------
+
+
+def test_fidelity_drops_blank_paragraphs_from_both_sides(tmp_path: Path) -> None:
+    """The check filtered the source's blank lines and kept the document's.
+
+    The two lists were then misaligned by one for every blank line, and every
+    paragraph after the first blank was reported as a mismatch -- on a document
+    whose front matter was in fact identical to its source. The document always
+    carries at least one blank paragraph, the section break that ends the cover, so
+    the asymmetry could not be avoided by writing the cover differently.
+    """
+    cover = tmp_path / "cover.docx"
+    build_docx(
+        cover,
+        body="\n".join(
+            [
+                paragraph_xml("A COVER TITLE", style="CoverTitle"),
+                '<w:p><w:pPr><w:pStyle w:val="CoverTitle"/></w:pPr></w:p>',
+                paragraph_xml("A line with a blank above it.", style="CoverTitle"),
+                '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/>'
+                '<w:pgMar w:top="1417" w:right="1417" w:bottom="1417" w:left="1417" '
+                'w:header="720" w:footer="720"/></w:sectPr>',
+            ]
+        ),
+        styles=STYLES,
+    )
+
+    document = tmp_path / "thesis.docx"
+    build_docx(
+        document,
+        body="\n".join(
+            [
+                paragraph_xml("A COVER TITLE", style="CoverTitle"),
+                '<w:p><w:pPr><w:pStyle w:val="CoverTitle"/></w:pPr></w:p>',
+                paragraph_xml("A line with a blank above it.", style="CoverTitle"),
+                '<w:p><w:pPr><w:sectPr/></w:pPr></w:p>',
+                paragraph_xml("A heading", style="Heading1"),
+                paragraph_xml("A body paragraph.", style="BodyText"),
+                _table(table_xml([["Head", "Value"], ["a", "1"]])),
+                _sect_pr(),
+            ]
+        ),
+        styles=STYLES,
+    )
+
+    config = make_config(tmp_path, frontmatter_docx=cover)
+    status, message = findings_for(document, config)["frontmatter.fidelity"]
+
+    assert status is Status.PASS, message
+
+
+def test_fidelity_still_notices_a_real_difference(tmp_path: Path) -> None:
+    """The control: a check that passes on everything is not a check."""
+    cover = tmp_path / "cover.docx"
+    build_docx(
+        cover,
+        body=paragraph_xml("WHAT THE COVER SAYS", style="CoverTitle")
+        + '<w:sectPr><w:pgSz w:w="11906" w:h="16838"/></w:sectPr>',
+        styles=STYLES,
+    )
+
+    document = tmp_path / "thesis.docx"
+    build_docx(
+        document,
+        body="\n".join(
+            [
+                paragraph_xml("SOMETHING ELSE ENTIRELY", style="CoverTitle"),
+                paragraph_xml("A heading", style="Heading1"),
+                paragraph_xml("A body paragraph.", style="BodyText"),
+                _table(table_xml([["Head", "Value"], ["a", "1"]])),
+                _sect_pr(),
+            ]
+        ),
+        styles=STYLES,
+    )
+
+    config = make_config(tmp_path, frontmatter_docx=cover)
+    report = evaluate(document, config=config)
+    finding = next(f for f in report.findings if f.check == "frontmatter.fidelity")
+
+    assert finding.status is Status.FAIL
+    # The differing paragraph is named in the detail, which is where a reader looks
+    # to find out *which* line drifted rather than only that one did.
+    assert any("SOMETHING ELSE ENTIRELY" in entry for entry in finding.detail), finding.detail
 
 
 # ---------------------------------------------------------------------------
