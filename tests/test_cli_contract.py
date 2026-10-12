@@ -19,6 +19,7 @@ import pytest
 
 from thesis_refinery.cli import SUBCOMMANDS, build_parser
 from thesis_refinery.commands.diff import add_arguments as add_diff_arguments
+from thesis_refinery.commands.init import add_arguments as add_init_arguments
 from thesis_refinery.commands.ledger import add_arguments as add_ledger_arguments
 from thesis_refinery.pipeline import add_build_arguments, add_render_arguments
 from thesis_refinery.verify.audit import add_arguments as add_audit_arguments
@@ -28,6 +29,7 @@ from thesis_refinery.verify.gate import add_arguments as add_verify_arguments
 # bodies on purpose: if it were derived from the handler it could not catch a
 # handler that started reading something new.
 HANDLER_ATTRIBUTES: dict[str, tuple[str, ...]] = {
+    "init": ("dest", "force", "title"),
     "render": ("project", "quarto", "all_formats"),
     "build": ("project", "quarto", "all_formats", "skip_render", "no_verify"),
     "verify": ("docx", "project_dir", "prefix", "json", "verbose"),
@@ -44,6 +46,7 @@ REQUIRED = {
 }
 
 MODULE_ARGUMENTS = {
+    "init": add_init_arguments,
     "render": add_render_arguments,
     "build": add_build_arguments,
     "verify": add_verify_arguments,
@@ -118,4 +121,4 @@ def test_build_inherits_every_render_option() -> None:
 def test_every_handler_attribute_is_covered_by_this_file() -> None:
     """A new command must be added here, or the contract goes unchecked."""
     wired = {command.name for command in SUBCOMMANDS if ":" in command.target}
-    assert wired - {"init", "extract-prefix"} <= set(HANDLER_ATTRIBUTES)
+    assert wired - {"extract-prefix"} <= set(HANDLER_ATTRIBUTES)

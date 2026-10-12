@@ -51,8 +51,10 @@ class Command(NamedTuple):
 
 
 def _add_init_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("dest", nargs="?", metavar="DEST", help="directory to create (default: ./my-thesis)")
+    p.add_argument("dest", nargs="?", metavar="DEST", default="my-thesis",
+                   help="directory to create (default: ./my-thesis)")
     p.add_argument("--force", action="store_true", help="write into a non-empty DEST anyway")
+    p.add_argument("--title", metavar="TEXT", help="thesis title to put in index.qmd")
 
 
 def _add_render_args(p: argparse.ArgumentParser) -> None:
@@ -109,7 +111,7 @@ def _add_extract_prefix_args(p: argparse.ArgumentParser) -> None:
 
 
 SUBCOMMANDS: tuple[Command, ...] = (
-    Command("init", "scaffold a new thesis project from the bundled example",
+    Command("init", "scaffold a new thesis project",
             "thesis_refinery.commands.init:run", _add_init_args),
     Command("render", "run the Quarto render step only",
             "thesis_refinery.pipeline:run_render", _add_render_args),

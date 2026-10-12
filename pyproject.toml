@@ -102,6 +102,16 @@ select = [
 ignore = [
     "E501", # line length is enforced by the formatter, not the linter
 ]
+# RUF001/RUF002/RUF003 flag characters that *look* like ASCII but are not. In a
+# project whose templates and documentation are partly Chinese, the full-width
+# forms are the correct characters, not confusables. Listed explicitly rather
+# than switching the rule off, so that a genuinely accidental look-alike is
+# still caught.
+allowed-confusables = [
+    "，", "。", "、", "；", "：", "？", "！",
+    "（", "）", "《", "》", "「", "」", "【", "】",
+    "“", "”", "‘", "’", "—", "…", "·",
+]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["E501"]
