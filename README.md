@@ -33,8 +33,14 @@ and tested; `extract-prefix` is declared and not yet built.
 | `ledger/` — digest baseline, inventory, paragraph diff | done |
 | `stages/format.py` — applies the specification | done |
 | `examples/demo-thesis` — synthetic, buildable, gate-passing | done |
-| `profiles/chemistry` — spectra appendix, caption shape, subscripts | optional extra |
+| `profiles/chemistry` — caption run shape, software-term subscripts | optional extra |
+| `profiles/chemistry/spectra.py` — a spectra appendix | planned, not present |
+| `stages/frontmatter.py`, `stages/references.py`, `stages/abbreviations.py` | planned, not present |
 | `extract-prefix` — cut a cover out of an existing document | declared, not built |
+
+Nothing in that list is a surprise to the tool itself: a stage that is absent is
+reported by name and the build stops there, and a profile module that is absent is
+named in prose rather than promised in `__all__`.
 
 ## The problem
 

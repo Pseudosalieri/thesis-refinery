@@ -29,8 +29,13 @@ thesis-refinery verify -C examples/demo-thesis
 | `ledger/` —— 哈希基线、清点、逐段比对 | 完成 |
 | `stages/format.py` —— 施加规格 | 完成 |
 | `examples/demo-thesis` —— 合成、可构建、过闸门 | 完成 |
-| `profiles/chemistry` —— 谱图附录、题注形态、下标 | 可选扩展 |
+| `profiles/chemistry` —— 题注 run 形态、软件报告项下标 | 可选扩展 |
+| `profiles/chemistry/spectra.py` —— 谱图附录 | 已规划,未落地 |
+| `stages/frontmatter.py` / `references.py` / `abbreviations.py` | 已规划,未落地 |
 | `extract-prefix` —— 从既有文档中裁出封面 | 已声明,未实现 |
+
+这份清单对工具本身不构成意外:缺失的阶段会**按名字报出来**并中止构建;缺失的
+profile 模块写在正文里说明,而不是挂在 `__all__` 上当作承诺。
 
 ## 要解决的问题
 
