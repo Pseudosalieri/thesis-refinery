@@ -70,7 +70,14 @@ def local_name(tag: str) -> str:
 # Only the parents this pipeline actually modifies are listed. Adding a parent
 # here is how you make it safe to insert into; leaving one out is what makes
 # `ordered_insert` refuse rather than guess.
-SCHEMA_ORDER: dict[str, tuple[str, ...]] = {
+#
+# A **tuple** entry means "these names all share one position". That matters for
+# the content models that are a repeated choice: inside `w:r`, `w:t`, `w:tab` and
+# `w:drawing` may appear any number of times in any order. Giving them distinct
+# indices would make `ordered_insert` try to place a new `w:t` *before* an
+# existing `w:tab`, silently reordering the inside of a run. Grouping them means
+# the new element is appended among its peers, which is the only correct answer.
+SCHEMA_ORDER: dict[str, tuple[str | tuple[str, ...], ...]] = {
     # CT_PPr
     "pPr": (
         "pStyle", "keepNext", "keepLines", "pageBreakBefore", "framePr", "widowControl",
@@ -104,19 +111,58 @@ SCHEMA_ORDER: dict[str, tuple[str, ...]] = {
         "tblBorders", "shd", "tblLayout", "tblCellMar", "tblLook", "tblCaption",
         "tblDescription", "tblPrChange",
     ),
-    # CT_Tbl: tblPr, tblGrid, then any number of rows
-    "tbl": ("tblPr", "tblGrid", "tr", "customXml", "sdt", "bookmarkStart",
-            "bookmarkEnd", "commentRangeStart", "commentRangeEnd", "proofErr",
-            "permStart", "permEnd", "ins", "del", "moveFromRangeStart",
-            "moveFromRangeEnd", "moveToRangeStart", "moveToRangeEnd"),
+    # CT_Tbl: properties, then the grid, then rows in any number
+    "tbl": (
+        "tblPr", "tblGrid",
+        ("tr", "customXml", "sdt", "bookmarkStart", "bookmarkEnd",
+         "commentRangeStart", "commentRangeEnd", "proofErr", "permStart", "permEnd",
+         "ins", "del", "moveFromRangeStart", "moveFromRangeEnd", "moveToRangeStart",
+         "moveToRangeEnd"),
+    ),
     # CT_TcPr
     "tcPr": (
         "cnfStyle", "tcW", "gridSpan", "hMerge", "vMerge", "tcBorders", "shd",
         "noWrap", "tcMar", "textDirection", "tcFitText", "vAlign", "hideMark",
         "headers", "cellIns", "cellDel", "cellMerge", "tcPrChange",
     ),
-    # CT_TblBorders. `start`/`end` are the later-edition spellings of `left`/`right`;
-    # both are accepted because documents in the wild contain both.
+    # CT_Tc: properties first, then block content in any order
+    "tc": (
+        "tcPr",
+        ("p", "tbl", "customXml", "sdt", "altChunk", "bookmarkStart", "bookmarkEnd",
+         "proofErr", "permStart", "permEnd", "ins", "del"),
+    ),
+    # CT_Row: property exceptions, then row properties, then cells
+    "tr": (
+        "tblPrEx", "trPr",
+        ("tc", "customXml", "sdt", "bookmarkStart", "bookmarkEnd", "proofErr",
+         "permStart", "permEnd", "ins", "del"),
+    ),
+    # CT_Body: block content in any order, then the section properties that close it
+    "body": (
+        ("p", "tbl", "customXml", "sdt", "altChunk", "bookmarkStart", "bookmarkEnd",
+         "proofErr", "permStart", "permEnd", "ins", "del", "moveFromRangeStart",
+         "moveFromRangeEnd", "moveToRangeStart", "moveToRangeEnd"),
+        "sectPr",
+    ),
+    # CT_P: properties first, then paragraph content in any order
+    "p": (
+        "pPr",
+        ("r", "hyperlink", "fldSimple", "subDoc", "customXml", "smartTag", "sdt",
+         "dir", "bdo", "ins", "del", "moveFrom", "moveTo", "bookmarkStart",
+         "bookmarkEnd", "commentRangeStart", "commentRangeEnd", "proofErr",
+         "permStart", "permEnd"),
+    ),
+    # CT_R: properties first, then run content in any order
+    "r": (
+        "rPr",
+        ("t", "tab", "br", "cr", "drawing", "pict", "object", "fldChar",
+         "instrText", "delInstrText", "delText", "noBreakHyphen", "softHyphen",
+         "sym", "ptab", "pgNum", "separator", "continuationSeparator",
+         "lastRenderedPageBreak", "footnoteReference", "endnoteReference",
+         "commentReference", "footnoteRef", "endnoteRef", "annotationRef", "ruby"),
+    ),
+    # CT_TblBorders. `start`/`end` are the later-edition spellings of
+    # `left`/`right`; both are accepted because documents contain both.
     "tblBorders": ("top", "start", "left", "bottom", "end", "right", "insideH",
                    "insideV", "tl2br", "tr2bl"),
     # CT_TcBorders
@@ -131,9 +177,48 @@ SCHEMA_ORDER: dict[str, tuple[str, ...]] = {
     "Types": ("Default", "Override"),
     # CT_Relationships is a homogeneous sequence; listed so inserts are explicit
     "Relationships": ("Relationship",),
+    # CT_Settings is long. This is a *partial* table covering what this project
+    # inserts; partiality is safe because ordered_insert compares only the
+    # positions of names it knows and steps over the rest. The invariant that
+    # must hold is the relative order of the listed names: evenAndOddHeaders
+    # precedes updateFields, as it does in the schema.
+    "settings": (
+        "writeProtection", "view", "zoom", "removePersonalInformation",
+        "defaultTabStop", "autoHyphenation", "evenAndOddHeaders",
+        "bookFoldRevPrinting", "bookFoldPrinting", "bookFoldPrintingSheets",
+        "savePreviewPicture", "updateFields", "hdrShapeDefaults", "footnotePr",
+        "endnotePr", "compat", "docVars", "rsids", "mathPr", "themeFontLang",
+        "clrSchemeMapping",
+    ),
     # CT_DocGrid is attribute-only, but listing it documents that it has no children
     "docGrid": (),
 }
+
+
+def _positions(order: tuple[str | tuple[str, ...], ...]) -> dict[str, int]:
+    """Flatten a schema order into name → position, with grouped entries sharing one."""
+    flattened: dict[str, int] = {}
+    for index, entry in enumerate(order):
+        if isinstance(entry, tuple):
+            for name in entry:
+                flattened[name] = index
+        else:
+            flattened[entry] = index
+    return flattened
+
+
+_POSITION_CACHE: dict[str, dict[str, int]] = {}
+
+
+def _position_of(parent_name: str, child_name: str) -> int | None:
+    order = SCHEMA_ORDER.get(parent_name)
+    if order is None:
+        return None
+    positions = _POSITION_CACHE.get(parent_name)
+    if positions is None:
+        positions = _positions(order)
+        _POSITION_CACHE[parent_name] = positions
+    return positions.get(child_name)
 
 
 def has_schema_order(parent: Element) -> bool:
@@ -214,40 +299,49 @@ def ordered_insert(
 ) -> Element:
     """Insert *child* into *parent* at the position the schema requires.
 
-    Children whose order is unknown are stepped over rather than used as an
-    anchor, so an unexpected extension element cannot push the new child to an
-    invalid position. When no later sibling exists, the child is appended, which
-    is correct for the sequence-typed content models here.
+    Three rules, each of which fixes a way this can go wrong:
+
+    * A child whose schema position is **0** goes to the very front. Those are
+      the leading property elements — ``w:pPr``, ``w:rPr``, ``w:tcPr``,
+      ``w:tblPr`` — and putting one after an unrecognised sibling would produce a
+      document Word calls corrupt.
+    * Otherwise the child goes before the first sibling whose position is
+      greater. An unknown sibling is *stepped over* rather than used as an
+      anchor, so an extension element cannot drag the new child out of place.
+    * Names sharing a position are peers, so a new peer is appended among them
+      rather than inserted before the first one. That is what keeps a new ``w:t``
+      from being placed ahead of an existing ``w:tab`` inside the same run.
 
     ``on_unknown`` controls what happens when the *parent* or the *child* is not
     in :data:`SCHEMA_ORDER`: ``"error"`` (default) raises, ``"append"`` appends.
     """
-    order = SCHEMA_ORDER.get(local_name(parent.tag))
-    if order is None:
+    parent_name = local_name(parent.tag)
+    if parent_name not in SCHEMA_ORDER:
         if on_unknown == "append":
             parent.append(child)
             return child
         raise UnsupportedElementOrder(
-            f"do not know the child order of <{local_name(parent.tag)}>; "
+            f"do not know the child order of <{parent_name}>; "
             "add it to xmlq.SCHEMA_ORDER or pass on_unknown='append'"
         )
 
-    key = local_name(child.tag)
-    try:
-        wanted = order.index(key)
-    except ValueError:
+    child_name = local_name(child.tag)
+    wanted = _position_of(parent_name, child_name)
+    if wanted is None:
         if on_unknown == "append":
             parent.append(child)
             return child
         raise UnsupportedElementOrder(
-            f"<{key}> is not a known child of <{local_name(parent.tag)}>"
-        ) from None
+            f"<{child_name}> is not a known child of <{parent_name}>"
+        )
+
+    if wanted == 0:
+        parent.insert(0, child)
+        return child
 
     for existing in parent:
-        name = local_name(existing.tag)
-        if name not in order:
-            continue
-        if order.index(name) > wanted:
+        position = _position_of(parent_name, local_name(existing.tag))
+        if position is not None and position > wanted:
             existing.addprevious(child)
             return child
 

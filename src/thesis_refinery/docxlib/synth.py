@@ -17,28 +17,54 @@ document is legible and reviewable rather than hidden inside a binary blob.
 from __future__ import annotations
 
 import zipfile
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
+from thesis_refinery.docxlib import units
 from thesis_refinery.docxlib.ns import CONTENT_TYPE, NSMAP, RELTYPE
 from thesis_refinery.docxlib.parse import DECLARATION
+from thesis_refinery.docxlib.xmlq import Element
 
 __all__ = [
+    "DOCUMENT_NAMESPACES",
     "build_docx",
     "content_types_xml",
     "document_xml",
+    "drawing_xml",
+    "inline_drawing_xml",
     "paragraph_xml",
+    "parse_fragment",
     "part_xml",
     "relationships_xml",
     "run_xml",
     "style_xml",
     "styles_xml",
+    "table_xml",
 ]
 
 W = NSMAP["w"]
 R = NSMAP["r"]
 CT = NSMAP["ct"]
 PR = NSMAP["pr"]
+WP = NSMAP["wp"]
+A = NSMAP["a"]
+PIC = NSMAP["pic"]
+
+DOCUMENT_NAMESPACES: dict[str, str] = {
+    "w": W,
+    "r": R,
+    "wp": WP,
+    "a": A,
+    "pic": PIC,
+    "mc": NSMAP["mc"],
+    "w14": NSMAP["w14"],
+}
+"""Prefixes ``word/document.xml`` declares.
+
+A fragment like a drawing uses ``wp:``/``a:``/``pic:`` and relies on the root
+declaring them, which is exactly how Word writes it, so a document built here
+looks like one Word produced rather than one assembled by string concatenation.
+"""
 
 
 def part_xml(
@@ -110,8 +136,144 @@ def document_xml(body: str) -> str:
     """``word/document.xml`` containing *body* inside a ``w:body``."""
     return part_xml(
         root="w:document",
-        namespaces={"w": W, "r": R},
+        namespaces=DOCUMENT_NAMESPACES,
         body=f"<w:body>\n{body}\n</w:body>",
+    )
+
+
+# ---------------------------------------------------------------------------
+# Drawings
+# ---------------------------------------------------------------------------
+
+
+def inline_drawing_xml(
+    relationship_id: str,
+    *,
+    width_emu: int,
+    height_emu: int,
+    name: str = "Picture",
+    drawing_id: int = 1,
+    rotation_degrees: float | None = None,
+) -> str:
+    """A ``w:drawing`` containing an inline picture.
+
+    Both sizes are written: ``wp:extent`` is what lays the picture out and
+    ``a:ext`` is the shape's own transform. A fragment with only one of them
+    renders differently in different readers, which is why
+    :func:`thesis_refinery.docxlib.drawings.set_extent_emu` updates both.
+    """
+    rotation = (
+        f' rot="{round((rotation_degrees % 360) * 60000)}"'
+        if rotation_degrees is not None
+        else ""
+    )
+    return (
+        "<w:drawing>"
+        '<wp:inline distT="0" distB="0" distL="0" distR="0">'
+        f'<wp:extent cx="{width_emu}" cy="{height_emu}"/>'
+        '<wp:effectExtent l="0" t="0" r="0" b="0"/>'
+        f'<wp:docPr id="{drawing_id}" name="{name} {drawing_id}"/>'
+        "<wp:cNvGraphicFramePr>"
+        '<a:graphicFrameLocks noChangeAspect="1"/>'
+        "</wp:cNvGraphicFramePr>"
+        "<a:graphic>"
+        f'<a:graphicData uri="{PIC}">'
+        "<pic:pic>"
+        "<pic:nvPicPr>"
+        f'<pic:cNvPr id="{drawing_id}" name="{name} {drawing_id}"/>'
+        "<pic:cNvPicPr/>"
+        "</pic:nvPicPr>"
+        "<pic:blipFill>"
+        f'<a:blip r:embed="{relationship_id}"/>'
+        "<a:stretch><a:fillRect/></a:stretch>"
+        "</pic:blipFill>"
+        "<pic:spPr>"
+        f'<a:xfrm{rotation}><a:off x="0" y="0"/><a:ext cx="{width_emu}" cy="{height_emu}"/></a:xfrm>'
+        '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom>'
+        "</pic:spPr>"
+        "</pic:pic>"
+        "</a:graphicData>"
+        "</a:graphic>"
+        "</wp:inline>"
+        "</w:drawing>"
+    )
+
+
+def drawing_xml(
+    relationship_id: str,
+    *,
+    width_emu: int,
+    height_emu: int,
+    name: str = "Picture",
+    drawing_id: int = 1,
+    rotation_degrees: float | None = None,
+) -> str:
+    """A paragraph containing an inline drawing. Convenience wrapper."""
+    inner = inline_drawing_xml(
+        relationship_id,
+        width_emu=width_emu,
+        height_emu=height_emu,
+        name=name,
+        drawing_id=drawing_id,
+        rotation_degrees=rotation_degrees,
+    )
+    return paragraph_xml(runs=[f'<w:r>{inner}</w:r>'])
+
+
+# ---------------------------------------------------------------------------
+# Tables
+# ---------------------------------------------------------------------------
+
+_TABLE_WIDTH_TWIPS = units.mm_to_twips(160.0)
+"""Usable text width: A4 width minus 25 mm of margin on each side."""
+
+
+def table_xml(
+    rows: Sequence[Sequence[str]],
+    *,
+    header: bool = True,
+    column_widths: Sequence[int] | None = None,
+) -> str:
+    """A ``w:tbl`` with the given cell text.
+
+    The first row is marked ``w:tblHeader`` when *header* is true, which is what
+    :func:`thesis_refinery.docxlib.tables.header_row` looks for before falling
+    back to "the first row".
+    """
+    if not rows:
+        raise ValueError("a table needs at least one row")
+
+    column_count = max(len(row) for row in rows)
+    widths = list(column_widths or [])
+    if len(widths) != column_count:
+        share = _TABLE_WIDTH_TWIPS // column_count
+        widths = [share] * column_count
+
+    grid = "".join(f'<w:gridCol w:w="{width}"/>' for width in widths)
+
+    body: list[str] = []
+    for index, row in enumerate(rows):
+        properties = "<w:trPr><w:tblHeader/></w:trPr>" if (header and index == 0) else ""
+        cells = []
+        for column in range(column_count):
+            text = row[column] if column < len(row) else ""
+            cells.append(
+                "<w:tc>"
+                f'<w:tcPr><w:tcW w:w="{widths[column]}" w:type="dxa"/></w:tcPr>'
+                f"{paragraph_xml(text)}"
+                "</w:tc>"
+            )
+        body.append(f"<w:tr>{properties}{''.join(cells)}</w:tr>")
+
+    return (
+        "<w:tbl>"
+        "<w:tblPr>"
+        '<w:tblW w:w="0" w:type="auto"/>'
+        '<w:tblLayout w:type="fixed"/>'
+        "</w:tblPr>"
+        f"<w:tblGrid>{grid}</w:tblGrid>"
+        f"{''.join(body)}"
+        "</w:tbl>"
     )
 
 
@@ -279,3 +441,22 @@ def _escape(text: str) -> str:
         .replace(">", "&gt;")
         .replace('"', "&quot;")
     )
+
+
+def parse_fragment(fragment: str, *, root: str = "w:frag") -> Element:
+    """Parse a body fragment on its own, returning its first element.
+
+    The builders here emit fragments that rely on ``word/document.xml``'s root
+    namespace declarations, exactly as Word does — which means a fragment cannot
+    be parsed by itself. This wraps it so tests and tools can work with one
+    paragraph or one table without building a whole document.
+    """
+    from thesis_refinery.docxlib.parse import parse
+
+    wrapper = part_xml(
+        root=root,
+        namespaces=DOCUMENT_NAMESPACES,
+        body=fragment,
+    )
+    parsed = parse(wrapper)
+    return parsed[0]
