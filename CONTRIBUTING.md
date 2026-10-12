@@ -23,6 +23,21 @@ checkout path is pure ASCII. If you develop under a non-ASCII path on Windows,
 read [`docs/troubleshooting.md`](docs/troubleshooting.md) first — an editable
 install will appear to succeed and then not be importable.
 
+### Why `ruff format` is not run
+
+`ruff check` is enforced. `ruff format` is not, and CI does not check it.
+
+The formatter explodes any collection carrying a magic trailing comma onto one
+element per line. The sequence tables in `docxlib/xmlq.py` are written that way
+on purpose — `SCHEMA_ORDER` for `w:pPr` is eight scannable lines, and the
+formatter makes it thirty-eight — and those tables are the most-read reference in
+the codebase. Machine-enforced formatting is worth having right up to the point
+where it makes the reference material worse, and this is that point.
+
+So: keep lines within 100 columns, keep imports sorted, and let `ruff check`
+decide the rest. Do not reformat the schema tables by hand to match a formatter
+that is not being run.
+
 ## The two rules that are not negotiable
 
 ### 1. Every check needs a test that makes it fail

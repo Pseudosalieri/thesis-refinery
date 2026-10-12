@@ -46,8 +46,12 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Lint
         run: python -m ruff check .
-      - name: Format check
-        run: python -m ruff format --check .
+      # No `ruff format --check`. The formatter explodes any collection that has a
+      # magic trailing comma onto one element per line, which turns the
+      # schema-order tables in `docxlib/xmlq.py` from eight scannable lines into
+      # thirty-eight. Those tables are the most-read reference in the codebase,
+      # so the formatter is not adopted. `ruff check` still enforces line length,
+      # import order and the rest.
       - name: Test
         # `-m "not slow"` keeps the matrix off the Quarto-dependent end-to-end
         # tests; those run in the dedicated job below.

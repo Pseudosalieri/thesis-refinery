@@ -36,8 +36,11 @@ $env:PYTHONIOENCODING = 'utf-8'
 python tools/check_desensitized.py     # must print PASS, 0 hits
 python -m pytest -q                    # must be green
 python -m ruff check .                 # must be clean
-python -m ruff format --check .
 ```
+
+There is deliberately no `ruff format --check`: the formatter would explode the
+schema-order tables in `docxlib/xmlq.py` onto one element per line. See the note
+in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
 
 The desensitisation gate is the one that matters most, and it is the one that is
 easy to skip because it always passes *after* you have been careful. Run it
