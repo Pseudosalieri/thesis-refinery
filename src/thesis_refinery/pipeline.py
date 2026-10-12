@@ -252,6 +252,13 @@ STAGES: tuple[Stage, ...] = (
         enabled=_configured_by_section("abbreviations"),
     ),
     Stage(
+        name="references",
+        summary="convert bibliography entries to the citation style",
+        module="thesis_refinery.stages.references",
+        function="apply",
+        enabled=_configured_by_section("references"),
+    ),
+    Stage(
         name="format",
         summary="apply the style specification",
         module="thesis_refinery.stages.format",
