@@ -30,25 +30,27 @@ from thesis_refinery.verify.checks import all_checks
 from thesis_refinery.verify.gate import evaluate
 from thesis_refinery.verify.report import render_json, render_text
 
-__all__ = ["main"]
+__all__ = ["add_arguments", "main", "run"]
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(
-        prog="thesis-refinery audit",
-        description=(
-            "Print a format report for a document. Never fails: use `verify` when you "
-            "want a non-zero exit code."
-        ),
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    """The argument contract shared with ``cli.SUBCOMMANDS``; a test checks it."""
+    parser.add_argument(
+        "--docx", metavar="PATH", help="document to report on (default: the configured product)"
     )
-    parser.add_argument("--docx", metavar="PATH", help="document to report on (default: the configured product)")
-    parser.add_argument("--project-dir", "-C", metavar="DIR", help="project root containing thesis.yml")
-    parser.add_argument("--prefix", metavar="PATH", help="cover source to compare the front matter against")
+    parser.add_argument(
+        "--project-dir", "-C", metavar="DIR", help="project root containing thesis.yml"
+    )
+    parser.add_argument(
+        "--prefix", metavar="PATH", help="cover source to compare the front matter against"
+    )
     parser.add_argument("--json", action="store_true", help="emit findings as JSON")
     parser.add_argument("--failures-only", action="store_true", help="omit passing checks")
     parser.add_argument("--out", metavar="PATH", help="also write the report to this file")
-    args = parser.parse_args(argv)
 
+
+def run(args: argparse.Namespace) -> int:
+    """Run the audit for an already-parsed namespace. Always exits 0 on a readable document."""
     try:
         config = load(args.project_dir)
     except ConfigError as exc:
@@ -78,6 +80,19 @@ def main(argv: Sequence[str] | None = None) -> int:
     # than apparently clean.
     print(f"\n{len(all_checks())} check(s) ran.")
     return ExitCode.OK
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Standalone entry point, for ``python -m thesis_refinery.verify.audit``."""
+    parser = argparse.ArgumentParser(
+        prog="thesis-refinery audit",
+        description=(
+            "Print a format report for a document. Never fails: use `verify` when you "
+            "want a non-zero exit code."
+        ),
+    )
+    add_arguments(parser)
+    return run(parser.parse_args(argv))
 
 
 def _render(report, *, failures_only: bool) -> str:

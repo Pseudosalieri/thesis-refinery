@@ -26,7 +26,7 @@ from thesis_refinery.verify.context import open_document
 from thesis_refinery.verify.findings import Report
 from thesis_refinery.verify.report import render_json, render_text
 
-__all__ = ["evaluate", "main"]
+__all__ = ["add_arguments", "evaluate", "main", "run"]
 
 
 def evaluate(
@@ -55,19 +55,34 @@ def evaluate(
     return Report(findings=findings, document=str(document))
 
 
-def main(argv: Sequence[str] | None = None) -> int:
-    """CLI entry point for ``thesis-refinery verify``."""
-    parser = argparse.ArgumentParser(
-        prog="thesis-refinery verify",
-        description="Run the gates. Non-zero exit when the document drifts.",
-    )
-    parser.add_argument("--docx", metavar="PATH", help="document to check (default: the configured product)")
-    parser.add_argument("--project-dir", "-C", metavar="DIR", help="project root containing thesis.yml")
-    parser.add_argument("--prefix", metavar="PATH", help="cover source to compare the front matter against")
-    parser.add_argument("--json", action="store_true", help="emit findings as JSON")
-    parser.add_argument("--verbose", "-v", action="store_true", help="include passing checks in the text report")
-    args = parser.parse_args(argv)
+# ---------------------------------------------------------------------------
+# Command-line entry points
+# ---------------------------------------------------------------------------
+# The argument names below are a contract with ``cli.SUBCOMMANDS``. The top-level
+# CLI builds its own subparser for each command — so that `--help` stays fast and
+# does not import lxml — and hands the resulting namespace to `run`. A test
+# asserts that the two agree, because duplicated argument definitions that are
+# not checked are duplicated argument definitions that drift.
 
+
+def add_arguments(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--docx", metavar="PATH", help="document to check (default: the configured product)"
+    )
+    parser.add_argument(
+        "--project-dir", "-C", metavar="DIR", help="project root containing thesis.yml"
+    )
+    parser.add_argument(
+        "--prefix", metavar="PATH", help="cover source to compare the front matter against"
+    )
+    parser.add_argument("--json", action="store_true", help="emit findings as JSON")
+    parser.add_argument(
+        "--verbose", "-v", action="store_true", help="include passing checks in the text report"
+    )
+
+
+def run(args: argparse.Namespace) -> int:
+    """Run the gate for an already-parsed namespace."""
     try:
         config = load(args.project_dir)
     except ConfigError as exc:
@@ -85,7 +100,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             config=config,
             prefix_source=Path(args.prefix) if args.prefix else None,
         )
-    except TrackedFileError as exc:  # pragma: no cover - defensive
+    except TrackedFileError as exc:
         print(f"thesis-refinery verify: {exc}")
         return ExitCode.ENVIRONMENT
 
@@ -95,6 +110,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         print()
         print(f"{len(report.failures())} check(s) failed. {len(all_checks())} check(s) ran.")
     return ExitCode.OK if report.ok else ExitCode.FAILED
+
+
+def main(argv: Sequence[str] | None = None) -> int:
+    """Standalone entry point, for ``python -m thesis_refinery.verify.gate``."""
+    parser = argparse.ArgumentParser(
+        prog="thesis-refinery verify",
+        description="Run the gates. Non-zero exit when the document drifts.",
+    )
+    add_arguments(parser)
+    return run(parser.parse_args(argv))
 
 
 if __name__ == "__main__":  # pragma: no cover

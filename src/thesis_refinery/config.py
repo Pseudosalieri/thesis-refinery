@@ -47,6 +47,7 @@ __all__ = [
     "ConfigError",
     "Identity",
     "ProjectPaths",
+    "Tools",
     "find_project_root",
     "load",
 ]
@@ -119,6 +120,20 @@ class Checks:
 
 
 @dataclass(frozen=True)
+class Tools:
+    """Where to find the external programs the pipeline shells out to.
+
+    Empty means "resolve from PATH". That is the default *because* hard-coding
+    an installation path is how the predecessor's build kept working for two
+    months after the pinned Quarto had been uninstalled: a fallback quietly took
+    over, and nobody learned that the configured path was dead.
+    """
+
+    quarto: str = ""
+    python: str = ""
+
+
+@dataclass(frozen=True)
 class Config:
     """Everything a build needs to know about a project."""
 
@@ -127,6 +142,7 @@ class Config:
     identity: Identity = field(default_factory=Identity)
     checks: Checks = field(default_factory=Checks)
     style: StyleSpec = field(default_factory=StyleSpec)
+    tools: Tools = field(default_factory=Tools)
     profiles: tuple[str, ...] = ()
     reference_docx: Path | None = None
     frontmatter_docx: Path | None = None
@@ -209,6 +225,7 @@ _KNOWN_TOP_LEVEL = frozenset(
         "checks",
         "style",
         "profiles",
+        "tools",
         "reference_docx",
         "frontmatter_docx",
     }
@@ -243,6 +260,7 @@ def _build(root: Path, document: Mapping[str, Any]) -> Config:
         identity=_build_identity(document.get("identity", {})),
         checks=_build_checks(document.get("checks", {})),
         style=_build_style(document.get("style", {})),
+        tools=_dataclass_from_mapping(Tools, document.get("tools", {}), "tools"),
         profiles=_string_tuple(document.get("profiles", []), "profiles"),
         reference_docx=_optional_path(root, document.get("reference_docx")),
         frontmatter_docx=_optional_path(root, document.get("frontmatter_docx")),

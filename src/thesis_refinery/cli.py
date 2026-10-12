@@ -36,6 +36,18 @@ class Command(NamedTuple):
 # ---------------------------------------------------------------------------
 # Per-subcommand arguments
 # ---------------------------------------------------------------------------
+# These deliberately duplicate the argument definitions inside each command's own
+# module. The duplication buys a fast `--help`: building the parser must not
+# import lxml, which a lazy target would otherwise force. A test asserts that
+# every attribute a handler reads is one the CLI actually sets, because
+# duplicated definitions that are not checked are duplicated definitions that
+# drift.
+#
+# `-C/--project-dir` is declared on the top-level parser *and* here, with
+# `default=SUPPRESS` so that the subparser does not overwrite a value the user
+# passed before the subcommand. argparse applies subparser defaults to the shared
+# namespace, so without SUPPRESS `thesis-refinery -C x verify` would silently
+# lose the `x`.
 
 
 def _add_init_args(p: argparse.ArgumentParser) -> None:
@@ -44,25 +56,34 @@ def _add_init_args(p: argparse.ArgumentParser) -> None:
 
 
 def _add_render_args(p: argparse.ArgumentParser) -> None:
+    p.add_argument("project", nargs="?", metavar="PROJECT_DIR", help="project root (default: search upwards)")
+    p.add_argument("--quarto", metavar="PATH", help="Quarto executable (default: resolve from PATH)")
+    p.add_argument("--profile", action="append", metavar="NAME", help="enable a domain profile (repeatable)")
     p.add_argument("--all-formats", action="store_true", help="also render PDF (needs a LaTeX engine)")
 
 
 def _add_build_args(p: argparse.ArgumentParser) -> None:
+    _add_render_args(p)
     p.add_argument("--skip-render", action="store_true", help="reuse the existing render product")
-    p.add_argument("--profile", action="append", default=None, metavar="NAME",
-                   help="enable a domain profile (repeatable); overrides thesis.yml")
     p.add_argument("--no-verify", action="store_true", help="skip the gates (useful while iterating)")
 
 
 def _add_verify_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--docx", metavar="PATH", help="document to check (default: the configured final product)")
-    p.add_argument("--against", metavar="PATH", help="also check markdown coverage against this reference .docx")
+    p.add_argument("--project-dir", "-C", metavar="DIR", default=argparse.SUPPRESS,
+                   help="project root containing thesis.yml")
     p.add_argument("--prefix", metavar="PATH", help="also check front-matter fidelity against this source .docx")
     p.add_argument("--json", action="store_true", help="emit findings as JSON on stdout")
+    p.add_argument("--verbose", "-v", action="store_true", help="include passing checks in the text report")
 
 
 def _add_audit_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--docx", metavar="PATH", help="document to report on (default: the configured final product)")
+    p.add_argument("--project-dir", "-C", metavar="DIR", default=argparse.SUPPRESS,
+                   help="project root containing thesis.yml")
+    p.add_argument("--prefix", metavar="PATH", help="cover source to compare the front matter against")
+    p.add_argument("--json", action="store_true", help="emit findings as JSON")
+    p.add_argument("--failures-only", action="store_true", help="omit passing checks")
     p.add_argument("--out", metavar="PATH", help="tee the report to this file")
 
 
@@ -87,13 +108,13 @@ SUBCOMMANDS: tuple[Command, ...] = (
     Command("init", "scaffold a new thesis project from the bundled example",
             "thesis_refinery.commands.init:run", _add_init_args),
     Command("render", "run the Quarto render step only",
-            "thesis_refinery.commands.build:run_render", _add_render_args),
+            "thesis_refinery.pipeline:run_render", _add_render_args),
     Command("build", "render, apply the style, and run the gates",
-            "thesis_refinery.commands.build:run", _add_build_args),
+            "thesis_refinery.pipeline:run_build", _add_build_args),
     Command("verify", "run the gates; non-zero exit when the document drifts",
-            "thesis_refinery.verify.gate:main", _add_verify_args),
+            "thesis_refinery.verify.gate:run", _add_verify_args),
     Command("audit", "print a human-readable format report; never fails",
-            "thesis_refinery.verify.audit:main", _add_audit_args),
+            "thesis_refinery.verify.audit:run", _add_audit_args),
     Command("ledger", "build or verify the hash inventory of tracked files",
             "thesis_refinery.commands.ledger:run", _add_ledger_args),
     Command("diff", "diff two .docx versions paragraph by paragraph",

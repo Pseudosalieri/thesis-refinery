@@ -86,5 +86,4 @@ def test_dispatch_does_not_swallow_a_missing_dependency() -> None:
         target="definitely_not_installed_anywhere:run",
         add_arguments=lambda p: None,
     )
-    with pytest.raises(ModuleNotFoundError):
-        _dispatch(ghost, argparse.Namespace())
+    with pytest.raises(ModuleNotFoundError):        _dispatch(ghost, argparse.Namespace())
