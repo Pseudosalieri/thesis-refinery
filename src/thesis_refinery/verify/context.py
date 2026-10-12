@@ -57,29 +57,43 @@ class Context:
         """Every direct ``w:p`` child of ``w:body``, front matter included."""
         return [child for child in self.body if child.tag == q("p")]
 
+    def partition(self) -> tuple[list[Element], list[Element]]:
+        """Split ``w:body`` into (front matter, body) in a single pass.
+
+        One walk, not two, and not a set difference. Returning both halves
+        together removes the question of how to recognise "the same element" in
+        the second list: comparing by ``id()`` is unreliable for lxml proxies,
+        because a proxy that has been collected lets a later proxy for a
+        different node reuse its id, and the resulting bug is a cover paragraph
+        silently counted as body text.
+
+        Front matter ends at the first level-1 heading. Without one there is no
+        boundary, so everything is front matter and the body is empty -- which
+        the checks report rather than guessing around.
+        """
+        front: list[Element] = []
+        body: list[Element] = []
+        reached_body = False
+
+        for child in self.body:
+            if child.tag == q("tbl"):
+                (body if reached_body else front).append(child)
+                continue
+            if child.tag != q("p"):
+                continue
+            if not reached_body and self.is_level_one_heading(child):
+                reached_body = True
+            (body if reached_body else front).append(child)
+
+        return front, body
+
     def front_matter(self) -> list[Element]:
         """Paragraphs and cover tables that precede the first level-1 heading.
-
-        This is a property of the document rather than of a check, because two
-        checks need it: the front-matter checks compare against it, and the body
-        checks must *exclude* it. A cover is not body text, and demanding a
-        first-line indent of the cover is the kind of false positive that gets a
-        gate switched off.
 
         Tables are included rather than skipped: a cover page is very often a
         form, and the fields an identity check looks for are inside that table.
         """
-        found: list[Element] = []
-        for child in self.body:
-            if child.tag == q("tbl"):
-                found.append(child)
-                continue
-            if child.tag != q("p"):
-                continue
-            if self.is_level_one_heading(child):
-                break
-            found.append(child)
-        return found
+        return self.partition()[0]
 
     def has_level_one_heading(self) -> bool:
         """True when a body paragraph carries a level-1 heading style.
@@ -101,8 +115,7 @@ class Context:
         on the cover follows the cover's, so demanding the body indent of either
         produces a hundred false positives.
         """
-        front = {id(element) for element in self.front_matter()}
-        return [child for child in self.all_body_paragraphs() if id(child) not in front]
+        return [element for element in self.partition()[1] if element.tag == q("p")]
 
     def all_paragraphs(self) -> list[Element]:
         """Every paragraph in the document, tables included."""

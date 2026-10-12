@@ -247,10 +247,23 @@ class Package:
         The context manager form exists because forgetting ``replace_xml`` is a
         silent no-op, and silent no-ops are the failure mode this project exists
         to eliminate.
+
+        A part that ends up unchanged is **not** written. That matters more than
+        it looks: python-docx's parser is configured with
+        ``remove_blank_text=True``, so parsing and re-serialising a part is not
+        byte-identical to the original even when nothing was edited. Comparing
+        the new bytes against the part's stored bytes would therefore report
+        every part a stage merely *looked* at as changed, and
+        :attr:`changed` -- the module's whole reason to exist -- would stop
+        meaning anything. Comparing the serialised tree before and after the
+        mutation is the comparison that answers the question actually being
+        asked.
         """
         root = self.xml(name)
+        before = etree.tostring(root)
         yield root
-        self.replace_xml(name, root)
+        if etree.tostring(root) != before:
+            self.replace_xml(name, root)
 
     def delete(self, name: str) -> None:
         """Remove a part. Deleting a missing part is not an error."""

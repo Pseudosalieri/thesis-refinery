@@ -69,12 +69,43 @@ def test_editing_one_part_changes_exactly_that_part(
     assert [name for name in before if before[name] != after[name]] == [DOCUMENT]
 
 
+def test_a_no_op_edit_does_not_mark_the_part_changed(sample_docx: Path) -> None:
+    """A part a stage merely *looked* at must not appear in ``changed``.
+
+    python-docx's parser is configured with ``remove_blank_text=True``, so a
+    parsed-and-re-serialised part is not byte-identical to the original even when
+    nothing was edited. Comparing the new bytes against the part's stored bytes
+    would therefore report every inspected part as changed, and ``changed`` --
+    this module's whole reason to exist -- would stop meaning anything. The
+    comparison that answers the question actually being asked is the serialised
+    tree before versus after the mutation.
+    """
+    with Package(sample_docx) as package:
+        with package.edit_xml(DOCUMENT):
+            pass
+
+        assert package.changed == set()
+
+
+def test_a_real_edit_still_marks_the_part_changed(sample_docx: Path) -> None:
+    """The control for the test above: silence must mean "no change", not "broken"."""
+    with Package(sample_docx) as package:
+        with package.edit_xml(DOCUMENT) as root:
+            body = find(root, "w:body")
+            assert body is not None
+            ordered_insert(body, new_element("w:sectPr"), on_unknown="append")
+
+        assert package.changed == {DOCUMENT}
+
+
 def test_a_rewritten_part_keeps_the_original_xml_declaration(
     sample_docx: Path, tmp_path: Path
 ) -> None:
     with Package(sample_docx) as package:
-        with package.edit_xml(DOCUMENT):
-            pass
+        with package.edit_xml(DOCUMENT) as root:
+            body = find(root, "w:body")
+            assert body is not None
+            ordered_insert(body, new_element("w:sectPr"), on_unknown="append")
         package.save(tmp_path / "out.docx")
 
     raw = parts_of(tmp_path / "out.docx")[DOCUMENT]
