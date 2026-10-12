@@ -155,7 +155,8 @@ def apply(source: Path, destination: Path, *, style: StyleSpec) -> Path:
         styles_before = _snapshot(styles_root) if styles_root is not None else None
 
         sections = _sections(document, body)
-        heading_index = _heading_index(body, style=style, records=records)
+        heading_indices = _heading_indices(body, style=style, records=records)
+        heading_index = heading_indices[0] if heading_indices else None
 
         _apply_page_setup(sections, style)
         _apply_numbering(sections, _first_body_section(sections, heading_index), style)
@@ -167,9 +168,9 @@ def apply(source: Path, destination: Path, *, style: StyleSpec) -> Path:
             sections,
             style,
             heading_style_name=_level_one_style_name(records, style),
-            heading_text=text_of(body[heading_index]) if heading_index is not None else "",
+            headings=[(index, text_of(body[index])) for index in heading_indices],
         )
-        _apply_settings(package, even_header=even_header)
+        _apply_settings(package, sections, even_header=even_header)
 
         _write_if_changed(package, DOCUMENT_PART, document, document_before)
         if styles_root is not None and styles_before is not None:
@@ -262,16 +263,24 @@ def _apply_page_setup(sections: Sequence[_Section], style: StyleSpec) -> None:
     the end. The checks read the same way, per section, and would report the
     appendix rather than the body.
 
-    The first section takes the front-matter side margins and the rest take the
-    body's. Two side values rather than one because a bound thesis is given a wider
-    gutter on the cover and declaration pages, and those pages are a section of
-    their own — the alternative, one margin everywhere, is wrong at one end of the
-    document whichever value you pick.
+    The front-matter side margins apply to the first section **only when there is
+    more than one section**. Two side values rather than one because a bound thesis
+    is given a wider gutter on the cover and declaration pages, and those pages are
+    a section of their own. That "of their own" is the whole condition: the wider
+    gutter exists for a cover that was imported as a separate section, so a
+    single-section document has no front matter to give it to and taking it anyway
+    would make ``body_side_mm`` a configuration value with no effect — which is what
+    it was. A one-section thesis is body from start to finish, and gets the body
+    margins.
     """
     margins = style.margins
+    has_front_matter_section = len(sections) > 1
 
     for index, section in enumerate(sections):
-        side = margins.front_matter_side_twips if index == 0 else margins.body_side_twips
+        if has_front_matter_section and index == 0:
+            side = margins.front_matter_side_twips
+        else:
+            side = margins.body_side_twips
 
         size = ensure_ordered(section.element, "w:pgSz")
         size.set(q("w"), str(style.page.width_twips))
@@ -505,6 +514,25 @@ def _is_body_style(style_id: str, name: str, style: StyleSpec) -> bool:
     return style_id.replace(" ", "") in wanted or name.replace(" ", "") in wanted
 
 
+def _heading_indices(
+    body: Element, *, style: StyleSpec, records: Mapping[str, _StyleRecord]
+) -> list[int]:
+    """The body indices of every level-1 heading, in document order.
+
+    More than one because a thesis has more than one chapter, and each chapter's
+    even pages carry its own title. Returning only the first is what made the
+    even-page running head show chapter one on every chapter's pages.
+    """
+    found: list[int] = []
+    for index, child in enumerate(body):
+        if child.tag != q("p"):
+            continue
+        name = _style_name_of(child, records)
+        if name is not None and style.heading_style_matches(name, 1):
+            found.append(index)
+    return found
+
+
 def _heading_index(
     body: Element, *, style: StyleSpec, records: Mapping[str, _StyleRecord]
 ) -> int | None:
@@ -516,13 +544,8 @@ def _heading_index(
     specification's canonical name is ``Heading 1`` — and a scan that knows only
     the English one runs to the end of the document and indents the cover.
     """
-    for index, child in enumerate(body):
-        if child.tag != q("p"):
-            continue
-        name = _style_name_of(child, records)
-        if name is not None and style.heading_style_matches(name, 1):
-            return index
-    return None
+    indices = _heading_indices(body, style=style, records=records)
+    return indices[0] if indices else None
 
 
 def _level_one_style_name(records: Mapping[str, _StyleRecord], style: StyleSpec) -> str:
@@ -570,9 +593,9 @@ def _apply_running_heads(
     style: StyleSpec,
     *,
     heading_style_name: str,
-    heading_text: str,
+    headings: Sequence[tuple[int, str]],
 ) -> bool:
-    """Ensure a default header and footer, plus the even header when asked for.
+    """Ensure a default header and footer, plus the even headers when asked for.
 
     Returns ``True`` when an ``even`` header was referenced, which is what the
     document-wide "different even and odd pages" flag has to accompany.
@@ -605,17 +628,144 @@ def _apply_running_heads(
     if not style.header_footer.even_page_uses_heading:
         return False
 
-    even_id = _ensure_running_part(
+    _apply_even_headers(
         package,
         sections,
-        kind="header",
-        side=_EVEN,
-        fill=lambda root: _write_even_header(
-            root, style=style, style_name=heading_style_name, text=heading_text
-        ),
+        style,
+        heading_style_name=heading_style_name,
+        headings=headings,
     )
-    _point_sections(sections, kind="header", side=_EVEN, rel_id=even_id)
     return True
+
+
+def _governing_heading(
+    headings: Sequence[tuple[int, str]], *, start: int, end: int
+) -> int | None:
+    """Which heading governs the body range ``(start, end]``.
+
+    *headings* pairs each level-1 heading's body index with its text. Returns a
+    *position* in that sequence, or ``None`` when there are none.
+
+    The rule, in order: the first heading that **starts inside** the range; else
+    the last heading before it; else the first heading at all.
+
+    The first clause is what makes a chapter-per-section document exact, and a real
+    thesis is that shape once the front matter has been imported and the section
+    breaks are in place. The fallback matters for the shape that cannot be exact —
+    one section containing every chapter, which is what a document rendered with no
+    section breaks looks like. There, the first heading is the honest guess: the
+    first even page of the body is inside chapter one, so showing chapter one's
+    title is right for at least the page a reader checks first. Showing the *last*
+    chapter's title, which "the last heading before the end" would give, is wrong on
+    every page including that one.
+    """
+    if not headings:
+        return None
+
+    for position, (body_index, _) in enumerate(headings):
+        if start < body_index <= end:
+            return position
+
+    preceding = [position for position, (body_index, _) in enumerate(headings) if body_index <= end]
+    return preceding[-1] if preceding else 0
+
+
+def _apply_even_headers(
+    package: Package,
+    sections: Sequence[_Section],
+    style: StyleSpec,
+    *,
+    heading_style_name: str,
+    headings: Sequence[tuple[int, str]],
+) -> None:
+    """Give each run of sections sharing a chapter its own cached even-page head.
+
+    One part per distinct chapter rather than one for the whole document. The cached
+    result of a ``STYLEREF`` is what a reader sees before Word has refreshed
+    anything — and in a file sent to a supervisor, that may be all they ever see —
+    so a single document-wide cache means every chapter's even pages show chapter
+    one's title. The earlier revision of this stage did exactly that.
+
+    Sections are grouped by their governing heading, and several sections sharing a
+    chapter share a part, so a document with one chapter per section gets one part
+    per chapter and a document with no section breaks keeps exactly one.
+    """
+    boundaries = [-1, *(section.closes_at for section in sections)]
+    groups: dict[int | None, list[int]] = {}
+
+    for index, section in enumerate(sections):
+        governing = _governing_heading(headings, start=boundaries[index], end=section.closes_at)
+        groups.setdefault(governing, []).append(index)
+
+    targets = _relationship_targets(package, "header")
+    claimed: set[str] = set()
+
+    for governing, member_indices in sorted(
+        groups.items(), key=lambda item: item[0] if item[0] is not None else -1
+    ):
+        members = [sections[index] for index in member_indices]
+        text = headings[governing][1] if governing is not None else ""
+        part = _unclaimed_referenced_part(members, targets, claimed)
+        rel_id = _write_even_part(
+            package, part, style=style, style_name=heading_style_name, text=text
+        )
+        target = _part_of(package, rel_id)
+        if target:
+            claimed.add(target)
+        _point_sections(members, kind="header", side=_EVEN, rel_id=rel_id)
+
+
+def _unclaimed_referenced_part(
+    sections: Sequence[_Section], targets: Mapping[str, str], claimed: set[str]
+) -> str | None:
+    """An ``even`` header part one of *sections* already references and nobody claimed.
+
+    Reuse rather than replacement, because a freshly created part does not take an
+    older one out of scope: the gate reads header parts through the document's
+    relationships, so a second part is a second part that must also conform.
+    """
+    for section in sections:
+        reference = _reference_of(section.element, kind="header", side=_EVEN)
+        if reference is None:
+            continue
+        part = targets.get(reference.get(qn("r:id")))
+        if part is not None and part not in claimed:
+            return part
+    return None
+
+
+def _write_even_part(
+    package: Package,
+    part: str | None,
+    *,
+    style: StyleSpec,
+    style_name: str,
+    text: str,
+) -> str:
+    """Write one even header part, creating it when *part* is ``None``, and return its ``rId``."""
+    if part is None:
+        root = _new_part_root("header")
+        _write_even_header(root, style=style, style_name=style_name, text=text)
+        part = _next_part_name(package, "header")
+        package.replace_xml(part, root)
+        _ensure_content_type(package, part, CONTENT_TYPE["header"])
+        return _ensure_relationship(package, "header", part)
+
+    root = package.xml(part)
+    before = _snapshot(root)
+    for child in list(root):
+        root.remove(child)
+    _write_even_header(root, style=style, style_name=style_name, text=text)
+    _write_if_changed(package, part, root, before)
+    return _ensure_relationship(package, "header", part)
+
+
+def _part_of(package: Package, rel_id: str) -> str:
+    """The part name a document relationship id resolves to, or a marker if unknown."""
+    for relationship in package.relationships(DOCUMENT_PART):
+        if relationship.get("Id") == rel_id:
+            return relationship.get("Target", "")
+    return ""
 
 
 def _ensure_running_part(
@@ -689,14 +839,18 @@ def _write_even_header(
 ) -> None:
     """The even-page running head: the current chapter, through a ``STYLEREF`` field.
 
-    The field's cached result is the first chapter's title rather than nothing,
-    because a field whose result is empty shows no running head at all until Word
-    refreshes it — and the document as committed should show what the author will
-    see on the page.
+    The field's cached result is the title of the chapter **this part belongs to**,
+    not of the first chapter in the document. A cached result is what a reader sees
+    before Word has refreshed anything, so a document-wide cache would print chapter
+    one's title on every chapter's even pages — and the file is often read before
+    it is ever opened in Word. ``updateFields`` asks Word to recompute it on open,
+    which is what makes it exactly right from then on; the cache is what makes it
+    right until then.
 
-    The rule below the head is drawn here too, and that is not decoration: the gate
-    asks it of *every* header part, so an even header without one would make the
-    formatted document fail the check the default header just satisfied.
+    The rule below the head is drawn here too. The gate asks it of the header parts
+    a document actually uses, and an even header is one of them whenever the
+    even-and-odd flag is set, so an even header without a rule would put a ruled
+    head on the odd pages and a bare one on the even pages of the same submission.
     """
     paragraph = _add_paragraph(root)
     if style_name:
@@ -915,31 +1069,52 @@ def _ensure_content_type(package: Package, part_name: str, content_type: str) ->
 # ---------------------------------------------------------------------------
 
 
-def _apply_settings(package: Package, *, even_header: bool) -> None:
+def _apply_settings(
+    package: Package,
+    sections: Sequence[_Section],
+    *,
+    even_header: bool,
+) -> None:
     """Set the document-wide flags this stage is responsible for.
 
     ``w:updateFields`` makes Word refresh every field when the document is opened,
     which is what makes a table of contents' page numbers right without anybody
-    pressing F9. It is also how a hand-placed placeholder an author intends to fill
-    in gets replaced by an empty result, so it is turned on deliberately here
-    rather than left to habit; ``docxlib.fields`` carries the same warning.
+    pressing F9, and what replaces the cached chapter title in an even-page running
+    head with the one Word computes for the page it is actually printing. It is
+    also how a hand-placed placeholder an author intends to fill in gets replaced by
+    an empty result, so it is turned on deliberately here rather than left to
+    habit; ``docxlib.fields`` carries the same warning.
 
     ``w:evenAndOddHeaders`` is what makes the ``even`` header mean anything: with
     the flag off, Word prints the default header on every page and the chapter
     title never appears.
 
-    **A settings part is never created.** Both flags live in a part that also holds
-    the compatibility mode, the default tab stop and the theme language, and a
-    stage that manufactured one to carry a flag would be inventing values it has no
-    facts about — the same refusal the ``updateFields`` rule states, applied to
-    both. The cost is stated rather than hidden: on a document with no settings
-    part the even header is referenced and Word will not use it until the document
-    grows one. A document built from a renderer's reference file has one already.
-    """
-    if not package.exists(SETTINGS_PART):
-        return
+    **The settings part is created when it is missing.** An earlier revision of
+    this stage refused to create one, on the grounds that a stage should not invent
+    values it has no facts about. That reasoning is right about the *other*
+    children of this part — the compatibility mode, the default tab stop, the theme
+    language — and it is wrong about these two, because there is nowhere else for
+    them to live. The cost of the refusal was measurable: on a document without a
+    settings part, this stage created and referenced an even header that Word then
+    ignored, so ``even_page_uses_heading`` was a configuration value with no
+    effect. A stage whose own output does not do what its specification says is a
+    worse outcome than a stage that writes two flags into a part it created.
 
-    settings = package.xml(SETTINGS_PART)
+    A ``w:evenAndOddHeaders`` found *on a section* is removed. WordprocessingML
+    puts the flag in settings, and a stray copy in a ``w:sectPr`` is invalid; a
+    document carrying one is the shape of an earlier tool's mistake, and leaving it
+    would keep the invalidity while the real flag did the work.
+    """
+    package.ensure_content_type_override(SETTINGS_PART, CONTENT_TYPE["settings"])
+    if package.find_relationship(DOCUMENT_PART, "settings") is None:
+        package.add_relationship(DOCUMENT_PART, "settings", "settings.xml")
+
+    for section in sections:
+        stray = find(section.element, "w:evenAndOddHeaders")
+        if stray is not None:
+            section.element.remove(stray)
+
+    settings = _settings_root(package)
     before = _snapshot(settings)
 
     if even_header and not _is_true(find(settings, "w:evenAndOddHeaders")):
@@ -949,6 +1124,19 @@ def _apply_settings(package: Package, *, even_header: bool) -> None:
         fields.set_update_fields(settings, True)
 
     _write_if_changed(package, SETTINGS_PART, settings, before)
+
+
+def _settings_root(package: Package) -> Element:
+    """The settings part, created with its namespace declaration if absent."""
+    if package.exists(SETTINGS_PART):
+        return package.xml(SETTINGS_PART)
+
+    # A part root needs its own namespace declaration: `xmlq.new` deliberately
+    # omits one, which is right for an element that lands in a tree that already
+    # declares it and wrong for a part this stage is the first to write.
+    root = etree.Element(qn("w:settings"), nsmap={"w": NSMAP["w"]})
+    package.replace_xml(SETTINGS_PART, root)
+    return package.xml(SETTINGS_PART)
 
 
 def _is_true(element: Element | None) -> bool:

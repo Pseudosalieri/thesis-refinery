@@ -19,9 +19,9 @@ from pathlib import Path
 
 from thesis_refinery.config import Checks, Identity
 from thesis_refinery.docxlib import drawings as drawings_module
-from thesis_refinery.docxlib.ns import RELTYPE, q
+from thesis_refinery.docxlib.ns import RELTYPE, q, qn
 from thesis_refinery.docxlib.pkgs import Package
-from thesis_refinery.docxlib.xmlq import Element, find, iter_descendants, text_of
+from thesis_refinery.docxlib.xmlq import Element, find, findall, iter_descendants, text_of
 from thesis_refinery.style import StyleSpec
 from thesis_refinery.verify.findings import Expectations
 from thesis_refinery.verify.styles import StyleIndex, paragraph_style_id
@@ -141,6 +141,79 @@ class Context:
         Word paginates.
         """
         return list(iter_descendants(self.root, "w:sectPr"))
+
+    def _resolved_targets(self) -> dict[str, str]:
+        """Relationship id → part name, for the document's own relationships."""
+        names = set(self.part_names())
+        resolved: dict[str, str] = {}
+        for relationship in self.package.relationships(DOCUMENT_PART):
+            target = relationship.get("Target", "")
+            if not target:
+                continue
+            if target.startswith("/"):
+                resolved[relationship.get("Id")] = target.lstrip("/")
+            elif target in names:
+                resolved[relationship.get("Id")] = target
+            else:
+                # A running-head target is written relative to `word/`.
+                resolved[relationship.get("Id")] = f"word/{target}"
+        return resolved
+
+    def running_part_references(self, kind: str) -> dict[str, set[str]]:
+        """Which running-head parts the sections actually use, keyed by ``w:type``.
+
+        The distinction the gate needs, and the reason this method exists rather
+        than a plain "every header part in the package". A package can hold a part
+        that no section references any more — a stage that repoints a section at a
+        new part leaves the old one behind, and it stays reachable through the
+        document's relationships. Checking such a part is checking something the
+        document does not print: it reports defects nobody can see and, worse, it can
+        *pass* on a part the document does use being wrong, because the check found
+        the right text in a part nothing points at.
+        """
+        tag = "w:headerReference" if kind == "header" else "w:footerReference"
+        targets = self._resolved_targets()
+
+        found: dict[str, set[str]] = {}
+        for section in self.sections():
+            for reference in findall(section, tag):
+                side = reference.get(q("type")) or "default"
+                part = targets.get(reference.get(qn("r:id")))
+                if part:
+                    found.setdefault(side, set()).add(part)
+        return found
+
+    def referenced_running_parts(self, kind: str) -> set[str]:
+        """Every part of *kind* that some section references, whatever the side."""
+        return {
+            part
+            for parts in self.running_part_references(kind).values()
+            for part in parts
+        }
+
+    def unused_running_parts(self) -> list[str]:
+        """Header and footer parts in the package that no section references.
+
+        Read from the package rather than from :attr:`header_parts`, because a part
+        can be in either of two states of disuse and only one of them is visible
+        through the relationships:
+
+        * **related but unreferenced** — what a stage leaves behind when it repoints
+          a section at a new part. The old part keeps its relationship, so the gate
+          loads it, and a check that asked the running-head rule of "every part in
+          the package" would be asking it of something the document does not print.
+        * **in the package and related to nothing** — dead weight the gate never
+          loads at all.
+        """
+        used: set[str] = set()
+        for kind in ("header", "footer"):
+            used |= self.referenced_running_parts(kind)
+
+        return sorted(
+            name
+            for name in self.part_names()
+            if _is_running_part(name) and name not in used
+        )
 
     def section_paragraph(self, section: Element) -> Element | None:
         """The paragraph that carries *section*'s break, if it carries one."""
@@ -315,6 +388,19 @@ def _resolve_document_target(target: str) -> str:
     if target.startswith("/"):
         return target.lstrip("/")
     return f"word/{target}"
+
+
+def _is_running_part(name: str) -> bool:
+    """True for a part name that is a header or a footer.
+
+    Matched on the directory and the filename stem rather than on a prefix, so a
+    media file called ``header.png`` is not mistaken for a running head.
+    """
+    directory, _, filename = name.rpartition("/")
+    if directory != "word":
+        return False
+    stem = filename.split(".", 1)[0]
+    return stem.startswith("header") or stem.startswith("footer")
 
 
 def section_kinds(context: Context) -> list[str]:

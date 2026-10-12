@@ -18,6 +18,7 @@ import pytest
 from thesis_refinery.config import Checks, Config, Identity, ProjectPaths
 from thesis_refinery.docxlib.ns import CONTENT_TYPE, NSMAP
 from thesis_refinery.docxlib.parse import parse
+from thesis_refinery.docxlib.pkgs import Package
 from thesis_refinery.docxlib.synth import (
     build_docx,
     document_xml,
@@ -71,13 +72,15 @@ drawn into the indent check.
 """
 
 
-def _sect_pr(*, with_header: bool = True, fake: str = "") -> str:
+def _sect_pr(*, with_header: bool = True, fake: str = "", even: bool = False) -> str:
     references = ""
     if with_header:
         references = (
             '<w:headerReference w:type="default" r:id="rIdHeader"/>'
             '<w:footerReference w:type="default" r:id="rIdFooter"/>'
         )
+    if even:
+        references += '<w:headerReference w:type="even" r:id="rIdEven"/>'
     return (
         "<w:sectPr>"
         f"{references}"
@@ -90,13 +93,26 @@ def _sect_pr(*, with_header: bool = True, fake: str = "") -> str:
     )
 
 
-def _header_part() -> str:
+def _even_header_part(text: str = "Chapter One") -> str:
+    """An even-page running head with a bottom rule and its own text."""
     body = (
         "<w:p>"
         "<w:pPr><w:pBdr>"
         '<w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/>'
         "</w:pBdr></w:pPr>"
-        f'<w:r><w:t xml:space="preserve">{RUNNING_HEAD}</w:t></w:r>'
+        f'<w:r><w:t xml:space="preserve">{text}</w:t></w:r>'
+        "</w:p>"
+    )
+    return part_xml(root="w:hdr", namespaces={"w": W}, body=body)
+
+
+def _header_part(text: str = RUNNING_HEAD) -> str:
+    body = (
+        "<w:p>"
+        "<w:pPr><w:pBdr>"
+        '<w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/>'
+        "</w:pBdr></w:pPr>"
+        f'<w:r><w:t xml:space="preserve">{text}</w:t></w:r>'
         "</w:p>"
     )
     return part_xml(root="w:hdr", namespaces={"w": W}, body=body)
@@ -379,3 +395,159 @@ def test_counts_and_json_shape(tmp_path: Path) -> None:
     assert payload["ok"] is True
     assert payload["document"] == str(document)
     assert isinstance(payload["findings"], list)
+
+
+# ---------------------------------------------------------------------------
+# Even-page running heads: the feature, the flag, and what the gate can see
+# ---------------------------------------------------------------------------
+
+
+def _settings_part(*, even_and_odd: bool) -> str:
+    flag = '<w:evenAndOddHeaders w:val="true"/>' if even_and_odd else ""
+    return part_xml(root="w:settings", namespaces={"w": W}, body=flag)
+
+
+def build_with_even_header(
+    path: Path,
+    *,
+    even_and_odd: bool | None,
+    even_text: str = "Chapter One",
+    default_text: str = RUNNING_HEAD,
+) -> Path:
+    """A document whose even pages are given their own running head.
+
+    *even_and_odd* of ``None`` means "no settings part at all", which is the shape
+    a renderer produces when it writes no document-wide flags — and the shape in
+    which the even header was silently dead.
+    """
+    parts = {
+        "word/header1.xml": _header_part(default_text).encode("utf-8"),
+        "word/header2.xml": _even_header_part(even_text).encode("utf-8"),
+        "word/footer1.xml": _footer_part().encode("utf-8"),
+    }
+    overrides = {
+        "/word/header1.xml": CONTENT_TYPE["header"],
+        "/word/header2.xml": CONTENT_TYPE["header"],
+        "/word/footer1.xml": CONTENT_TYPE["footer"],
+    }
+    relationships = [
+        ("rIdHeader", "header", "header1.xml"),
+        ("rIdEven", "header", "header2.xml"),
+        ("rIdFooter", "footer", "footer1.xml"),
+    ]
+    if even_and_odd is not None:
+        parts["word/settings.xml"] = _settings_part(even_and_odd=even_and_odd).encode("utf-8")
+        overrides["/word/settings.xml"] = CONTENT_TYPE["settings"]
+        relationships.append(("rIdSettings", "settings", "settings.xml"))
+
+    body = "\n".join(
+        [
+            COVER,
+            paragraph_xml("A heading", style="Heading1"),
+            paragraph_xml("A body paragraph.", style="BodyText"),
+            paragraph_xml("Fig. 1 A caption.", style="ImageCaption"),
+            _table(table_xml([["Head", "Value"], ["a", "1"]])),
+            _sect_pr(even=True),
+        ]
+    )
+    return build_docx(
+        path,
+        body=body,
+        styles=STYLES,
+        extra_parts=parts,
+        extra_overrides=overrides,
+        document_relationships=relationships,
+    )
+
+
+def status_of(document: Path, config: Config, check: str) -> Status | None:
+    for finding in evaluate(document, config=config).findings:
+        if finding.check == check:
+            return finding.status
+    return None
+
+
+def test_the_flag_that_activates_even_page_headers_is_checked(tmp_path: Path) -> None:
+    """The defect this check exists for: a configured feature that does nothing.
+
+    A stage created and referenced a chapter-title running head for even pages, Word
+    ignored it because ``w:evenAndOddHeaders`` was never set, and every other header
+    check passed — the default head was present and correct, the rule was present,
+    the folio was the right size. A document that is wrong in a way no check can see
+    is the failure this project exists to make impossible.
+    """
+    document = build_with_even_header(tmp_path / "dead.docx", even_and_odd=None)
+    config = make_config(tmp_path)
+
+    assert status_of(document, config, "headers.even-pages") is Status.FAIL
+
+    report = evaluate(document, config=config)
+    finding = next(f for f in report.findings if f.check == "headers.even-pages")
+    assert "evenAndOddHeaders" in finding.message
+    assert "word/header2.xml" in finding.detail
+
+
+def test_an_even_header_with_the_flag_set_passes(tmp_path: Path) -> None:
+    """The control: the same document, with the one line that makes it work."""
+    document = build_with_even_header(tmp_path / "alive.docx", even_and_odd=True)
+
+    assert status_of(document, make_config(tmp_path), "headers.even-pages") is Status.PASS
+
+
+def test_an_explicitly_disabled_flag_does_not_count_as_set(tmp_path: Path) -> None:
+    """Three states, not two: absent, false, and true are different documents."""
+    document = build_with_even_header(tmp_path / "off.docx", even_and_odd=False)
+
+    assert status_of(document, make_config(tmp_path), "headers.even-pages") is Status.FAIL
+
+
+def test_the_running_head_must_be_in_the_header_the_odd_pages_print(tmp_path: Path) -> None:
+    """Searching every part lets the wrong part pay for the right one.
+
+    Odd pages print the ``default`` header. A check that accepts the wording
+    wherever it appears will pass a document whose default head is wrong, because
+    the *even* head happens to contain the text — a pass earned by a part printed on
+    the other side of the sheet.
+    """
+    document = build_with_even_header(
+        tmp_path / "swapped.docx",
+        even_and_odd=True,
+        default_text="SOMETHING ELSE",
+        even_text=RUNNING_HEAD,
+    )
+    config = make_config(tmp_path)
+
+    assert status_of(document, config, "headers.odd-text") is Status.FAIL
+
+
+def test_the_rule_is_asked_of_the_parts_the_document_uses(tmp_path: Path) -> None:
+    """An orphaned part must not be able to fail the gate.
+
+    A stage that repoints a section at a new part leaves the old one behind, still
+    reachable through the document's relationships. Asking the rule of every part in
+    the package means asking it of something the document does not print.
+    """
+    document = build_with_even_header(tmp_path / "orphan.docx", even_and_odd=True)
+    config = make_config(tmp_path)
+
+    # Add a header part that is related to the document but referenced by no
+    # section: exactly the shape a stage leaves behind when it repoints a section.
+    with Package(document) as package:
+        package.write(
+            "word/header9.xml",
+            _even_header_part("Orphan").replace(
+                '<w:bottom w:val="single" w:sz="6" w:space="1" w:color="auto"/>', ""
+            ).encode("utf-8"),
+        )
+        package.ensure_content_type_override("word/header9.xml", CONTENT_TYPE["header"])
+        package.add_relationship("word/document.xml", "header", "header9.xml")
+        package.save(document, allow_in_place=True)
+
+    findings = evaluate(document, config=config).findings
+    rules = next(f for f in findings if f.check == "headers.rule")
+    orphans = next(f for f in findings if f.check == "headers.orphans")
+
+    assert rules.status is Status.PASS, "an unreferenced part must not fail the rule check"
+    assert orphans.status is Status.WARN
+    assert orphans.detail == ("word/header9.xml",)
+    assert all(f.status is not Status.FAIL for f in findings if f.check.startswith("headers."))

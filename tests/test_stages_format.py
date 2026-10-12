@@ -99,8 +99,17 @@ LETTER_SECTION = (
     "</w:sectPr>"
 )
 
-ADDED_PARTS = {"word/header1.xml", "word/header2.xml", "word/footer1.xml"}
-"""Parts a raw document has none of, and the stage creates."""
+ADDED_PARTS = {
+    "word/header1.xml",
+    "word/header2.xml",
+    "word/footer1.xml",
+    "word/settings.xml",
+}
+"""Parts a raw document has none of, and the stage creates.
+
+`word/settings.xml` is on the list because the two document-wide flags this stage
+is responsible for — `w:evenAndOddHeaders` and `w:updateFields` — have nowhere
+else to live, and an even header that Word ignores is not a running head."""
 
 CHANGED_PARTS = {
     "[Content_Types].xml",
@@ -885,11 +894,217 @@ def test_update_fields_and_even_odd_headers_are_declared_when_settings_exist(
     assert find(written, "w:evenAndOddHeaders") is not None
 
 
-def test_no_settings_part_is_created(tmp_path: Path) -> None:
+def test_a_settings_part_is_created_when_the_even_header_needs_one(tmp_path: Path) -> None:
+    """The settings part is created rather than assumed to exist.
+
+    This test asserts the reverse of what it asserted before, and the reversal is
+    the point. An earlier revision refused to create a settings part, on the
+    grounds that a stage should not invent values it has no facts about. That is
+    right about the *other* children of the part — the compatibility mode, the
+    default tab stop, the theme language — and wrong about these two flags, because
+    they have nowhere else to live.
+
+    The cost of the refusal was measurable: on a document without a settings part,
+    the stage created and referenced an even header that Word then ignored, so
+    `style.header_footer.even_page_uses_heading` was a configuration value with no
+    effect. A stage whose own output does not do what its specification says is
+    worse than a stage that writes two flags into a part it created.
+    """
     raw = build_raw(tmp_path / "raw.docx")
     assert "word/settings.xml" not in parts_of(raw)
 
     destination = tmp_path / "final.docx"
     format.apply(raw, destination, style=STYLE)
 
-    assert "word/settings.xml" not in parts_of(destination)
+    parts = parts_of(destination)
+    assert "word/settings.xml" in parts
+
+    written = xml_of(destination, "word/settings.xml")
+    assert find(written, "w:evenAndOddHeaders") is not None, (
+        "the even header is referenced, so the flag that makes Word use it must be set"
+    )
+
+    # A part this stage is the first to write needs its own namespace declaration
+    # and must be reachable from the document, or Word will not read it.
+    assert b"xmlns:w=" in parts["word/settings.xml"]
+    with Package(destination) as package:
+        assert package.find_relationship("word/document.xml", "settings") is not None
+        assert b"settings.xml" in parts["[Content_Types].xml"]
+
+
+# ---------------------------------------------------------------------------
+# Defect regressions
+# ---------------------------------------------------------------------------
+# Each of these asserts the behaviour that replaced a defect. They are written so
+# that restoring the old behaviour fails them, which is the only way a regression
+# test is worth having.
+
+
+def build_two_chapters(path: Path, *, styles: str = STYLES) -> Path:
+    """Two chapters, each closing its own section.
+
+    One chapter per section is the shape a real thesis has once the front matter has
+    been imported, and it is the only shape in which a per-section cached running
+    head can be exact. A single-section document with several chapters is the shape
+    that cannot be exact, and it is covered separately.
+    """
+    body = "\n".join(
+        [
+            _section_break("A cover paragraph.", style="CoverTitle"),
+            paragraph_xml("Chapter One", style="Heading1"),
+            paragraph_xml("Body of chapter one.", style="BodyText"),
+            _section_break("Chapter Two", style="Heading1"),
+            paragraph_xml("Body of chapter two.", style="BodyText"),
+            "<w:sectPr/>",
+        ]
+    )
+    return build_docx(path, body=body, styles=styles)
+
+
+def build_single_section(path: Path, *, styles: str = STYLES) -> Path:
+    """One section holding a whole document: no cover, so no front matter."""
+    body = "\n".join(
+        [
+            paragraph_xml("Chapter One", style="Heading1"),
+            paragraph_xml("Body text.", style="BodyText"),
+            "<w:sectPr/>",
+        ]
+    )
+    return build_docx(path, body=body, styles=styles)
+
+
+def _relationship_targets(package: Package) -> dict[str, str]:
+    """Relationship id → part name, with the document-relative targets resolved.
+
+    A header target is written relative to ``word/`` (``header2.xml``), so it has to
+    be turned into a part name before it can be compared with one.
+    """
+    known = set(package.names())
+    resolved: dict[str, str] = {}
+    for relationship in package.relationships("word/document.xml"):
+        target = relationship.get("Target", "")
+        resolved[relationship.get("Id")] = target if target in known else f"word/{target}"
+    return resolved
+
+
+def even_header_targets(path: Path) -> list[str | None]:
+    """The ``even`` header part each section references, in document order."""
+    with Package(path) as package:
+        targets = _relationship_targets(package)
+        document = package.xml("word/document.xml")
+        found: list[str | None] = []
+        for section in iter_descendants(document, "w:sectPr"):
+            reference = find(section, "w:headerReference", **{"w:type": "even"})
+            if reference is None:
+                found.append(None)
+                continue
+            found.append(targets.get(reference.get(qn("r:id"))))
+        return found
+
+
+def header_texts(path: Path) -> dict[str, str]:
+    """The text of every header part, keyed by part name."""
+    with Package(path) as package:
+        return {
+            name: text_of(package.xml(name))
+            for name in package.names()
+            if name.startswith("word/header")
+        }
+
+
+def test_each_chapter_gets_its_own_cached_even_header_title(tmp_path: Path) -> None:
+    """A document-wide cache shows chapter one on every chapter's even pages.
+
+    The cached result of a ``STYLEREF`` is what a reader sees before Word refreshes
+    anything, and a thesis is often read before it is ever opened in Word — a
+    supervisor reading a PDF, a committee member skimming a printout. One cache for
+    the whole document is therefore not a harmless approximation.
+    """
+    raw = build_two_chapters(tmp_path / "raw.docx")
+    destination = tmp_path / "final.docx"
+    format.apply(raw, destination, style=STYLE)
+
+    referenced = even_header_targets(destination)
+    assert len(referenced) == 3, "the fixture has three sections"
+    assert all(target is not None for target in referenced), "every section got an even header"
+
+    texts = header_texts(destination)
+    cached = {target: texts[target] for target in referenced if target is not None}
+
+    assert len(set(referenced)) == 2, (
+        "two chapters must produce two even header parts; one part means one cache "
+        f"for the whole document (got {referenced})"
+    )
+    assert set(cached.values()) == {"Chapter One", "Chapter Two"}, cached
+
+    # The section that holds chapter two must point at chapter two's part.
+    assert texts[referenced[2]] == "Chapter Two"
+    assert texts[referenced[1]] == "Chapter One"
+
+
+def test_a_single_section_document_takes_the_body_side_margins(tmp_path: Path) -> None:
+    """`body_side_mm` was unreachable: a one-section thesis took the cover's gutter.
+
+    The wider front-matter gutter exists for a cover that was imported as a separate
+    section. A document with one section has no such cover, so taking the value
+    anyway made the configuration key a setting with no effect — and the effect was
+    invisible, because the gate accepts either margin.
+    """
+    raw = build_single_section(tmp_path / "raw.docx")
+    destination = tmp_path / "final.docx"
+    format.apply(raw, destination, style=STYLE)
+
+    document = xml_of(destination, "word/document.xml")
+    section = next(iter_descendants(document, "w:sectPr"))
+    margins = find(section, "w:pgMar")
+
+    assert margins is not None
+    assert margins.get(qn("w:left")) == str(STYLE.margins.body_side_twips)
+    assert margins.get(qn("w:right")) == str(STYLE.margins.body_side_twips)
+
+
+def test_a_document_with_a_front_matter_section_still_takes_the_cover_margins(
+    tmp_path: Path,
+) -> None:
+    """The control: the fix must not remove the gutter from documents that have a cover."""
+    raw = build_raw(tmp_path / "raw.docx")
+    destination = tmp_path / "final.docx"
+    format.apply(raw, destination, style=STYLE)
+
+    document = xml_of(destination, "word/document.xml")
+    sections = list(iter_descendants(document, "w:sectPr"))
+    assert len(sections) == 2
+
+    first = find(sections[0], "w:pgMar")
+    second = find(sections[1], "w:pgMar")
+    assert first is not None and second is not None
+    assert first.get(qn("w:left")) == str(STYLE.margins.front_matter_side_twips)
+    assert second.get(qn("w:left")) == str(STYLE.margins.body_side_twips)
+
+
+def test_a_stray_even_and_odd_flag_on_a_section_is_removed(tmp_path: Path) -> None:
+    """The flag belongs in settings; a copy on a section is invalid WordprocessingML.
+
+    A document carrying one is the shape of an earlier tool's mistake. Leaving it
+    would keep the invalidity in the file while the real flag did the work, so the
+    two would disagree the moment anybody looked.
+    """
+    raw = tmp_path / "raw.docx"
+    body = "\n".join(
+        [
+            paragraph_xml("Chapter One", style="Heading1"),
+            paragraph_xml("Body text.", style="BodyText"),
+            "<w:sectPr><w:evenAndOddHeaders/></w:sectPr>",
+        ]
+    )
+    build_docx(raw, body=body, styles=STYLES)
+
+    destination = tmp_path / "final.docx"
+    format.apply(raw, destination, style=STYLE)
+
+    document = xml_of(destination, "word/document.xml")
+    for section in iter_descendants(document, "w:sectPr"):
+        assert find(section, "w:evenAndOddHeaders") is None
+
+    settings = xml_of(destination, "word/settings.xml")
+    assert find(settings, "w:evenAndOddHeaders") is not None
