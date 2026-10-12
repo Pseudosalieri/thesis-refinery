@@ -12,6 +12,30 @@ assertions, not eyeballs, prove it didn't drift.**
 > rounds. Interfaces may still move. See [CHANGELOG.md](CHANGELOG.md) for what
 > is landed and what is still pending.
 
+### What works today
+
+```bash
+thesis-refinery init my-thesis          # scaffold an empty project
+thesis-refinery build examples/demo-thesis   # render, format, and gate the bundled example
+thesis-refinery verify -C examples/demo-thesis
+```
+
+The bundled example builds and passes all seventeen checks, two of which skip
+because the example configures no cover identity. The formatting stage, the
+gates, the ledger, `init`, `diff` and the build orchestrator are all implemented
+and tested; `extract-prefix` is declared and not yet built.
+
+| Component | State |
+|---|---|
+| `docxlib` — OOXML primitives, part-level copy-on-write | done |
+| `style.py` / `config.py` — one specification, strict configuration | done |
+| `verify/` — seven checks, each with a negative test | done |
+| `ledger/` — digest baseline, inventory, paragraph diff | done |
+| `stages/format.py` — applies the specification | done |
+| `examples/demo-thesis` — synthetic, buildable, gate-passing | done |
+| `profiles/chemistry` — spectra appendix, caption shape, subscripts | optional extra |
+| `extract-prefix` — cut a cover out of an existing document | declared, not built |
+
 ## The problem
 
 Almost every thesis is edited in Word, and almost every thesis has to satisfy a
@@ -70,13 +94,13 @@ in place, so a failure always has exactly one candidate input.
 ## Quickstart
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]"                  # or: . ./tools/dev-env.sh
 
-thesis-refinery init my-thesis      # scaffold a project from the demo
+thesis-refinery init my-thesis           # scaffold an empty project
 cd my-thesis
-thesis-refinery build               # render + apply + format
-thesis-refinery verify              # gates; non-zero exit on drift
-thesis-refinery audit               # human-readable format report (never fails)
+thesis-refinery build                    # render, apply the style, run the gates
+thesis-refinery audit                    # the same checks as a readable report
+thesis-refinery verify                   # the same checks as an exit code
 ```
 
 Quarto is required for the render step. Everything else — style application,

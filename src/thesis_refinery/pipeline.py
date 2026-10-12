@@ -282,8 +282,17 @@ def build(
             return result
         result.steps_run.append("render")
 
-    for stage in STAGES:
-        destination = config.paths.output_dir / f"index-{stage.name}.docx"
+    for position, stage in enumerate(STAGES):
+        # The last stage writes the documented product path; the others write a
+        # file named after themselves, so that a failure has a localisable input.
+        # `verify` defaults to the product path, and the README names it, so it
+        # has to be the real thing rather than a copy of it.
+        is_last = position == len(STAGES) - 1
+        destination = (
+            config.paths.final_docx
+            if is_last
+            else config.paths.output_dir / f"index-{stage.name}.docx"
+        )
         _log(f"{stage.name}: {stage.summary}")
         try:
             current = run_stage(stage, current, destination, config)

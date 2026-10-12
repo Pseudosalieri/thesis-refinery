@@ -9,6 +9,29 @@
 > **状态:0.1.0,预发布。** 本引擎正从一条真实产线中抽取——那条产线支撑了一篇经过约 20 轮
 > 修订并最终送审通过的硕士学位论文。接口仍可能变动。已落地与待办见 [CHANGELOG.md](CHANGELOG.md)。
 
+### 现在就能用的部分
+
+```bash
+thesis-refinery init my-thesis                # 脚手架出一个空白项目
+thesis-refinery build examples/demo-thesis    # 渲染 + 施加版式 + 过闸门
+thesis-refinery verify -C examples/demo-thesis
+```
+
+示例论文可以完整构建,并通过全部十七项检查(其中两项因示例未配置封面身份而跳过)。
+样式施加阶段、闸门、台账、`init`、`diff` 与构建编排均已实现并有测试;`extract-prefix`
+已声明但尚未实现。
+
+| 组件 | 状态 |
+|---|---|
+| `docxlib` —— OOXML 原语、包级写时复制 | 完成 |
+| `style.py` / `config.py` —— 唯一规格、严格配置 | 完成 |
+| `verify/` —— 七项检查,每项都有负向测试 | 完成 |
+| `ledger/` —— 哈希基线、清点、逐段比对 | 完成 |
+| `stages/format.py` —— 施加规格 | 完成 |
+| `examples/demo-thesis` —— 合成、可构建、过闸门 | 完成 |
+| `profiles/chemistry` —— 谱图附录、题注形态、下标 | 可选扩展 |
+| `extract-prefix` —— 从既有文档中裁出封面 | 已声明,未实现 |
+
 ## 要解决的问题
 
 几乎所有学位论文都在 Word 里改,而几乎所有学位论文都要满足一套 Word 根本无法强制的格式规范。
@@ -62,13 +85,13 @@ chapters/*.qmd ──► quarto render ──► index.docx
 ## 快速开始
 
 ```bash
-pip install -e ".[dev]"
+pip install -e ".[dev]"                  # 或者用 . ./tools/dev-env.sh
 
-thesis-refinery init my-thesis      # 用示例脚手架出一个项目
+thesis-refinery init my-thesis           # 脚手架出一个空白项目
 cd my-thesis
-thesis-refinery build               # 渲染 + 施加 + 排版
-thesis-refinery verify              # 闸门;走样即非零退出
-thesis-refinery audit               # 人读的格式报告(永不失败)
+thesis-refinery build                    # 渲染 + 施加版式 + 过闸门
+thesis-refinery audit                    # 同一套检查,人读报告
+thesis-refinery verify                   # 同一套检查,非零退出
 ```
 
 渲染步骤需要 Quarto。除此之外——版式施加、校验、台账——都只作用于你手上已有的 `.docx`,
