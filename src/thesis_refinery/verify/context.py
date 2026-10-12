@@ -165,17 +165,18 @@ class Context:
     def is_body_style(self, paragraph: Element) -> bool:
         """True when the paragraph uses one of the configured body styles.
 
-        Matches on both id and display name, because pandoc writes
-        ``FirstParagraph`` while Word shows ``First Paragraph``, and a check that
-        knows only one of them silently checks nothing.
+        Matches on both id and display name, and case-insensitively on both,
+        because pandoc writes ``FirstParagraph`` in the id and ``first
+        paragraph`` in the name while Word displays ``First Paragraph``. A check
+        that knows only one spelling silently checks nothing.
         """
         style_id = paragraph_style_id(paragraph)
         if style_id is None:
             return False
         definition = self.styles.definition(style_id)
         name = definition.name if definition is not None else style_id
-        wanted = {candidate.replace(" ", "") for candidate in self.style.body_style_ids}
-        return style_id.replace(" ", "") in wanted or name.replace(" ", "") in wanted
+        wanted = {candidate.replace(" ", "").casefold() for candidate in self.style.body_style_ids}
+        return style_id.replace(" ", "").casefold() in wanted or name.replace(" ", "").casefold() in wanted
 
     def is_image_caption(self, paragraph: Element) -> bool:
         return self._is_caption(paragraph, self.style.caption.image_style_ids)

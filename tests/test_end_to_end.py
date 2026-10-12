@@ -16,6 +16,8 @@ Run it deliberately with:
 
 from __future__ import annotations
 
+import argparse
+import shutil
 from pathlib import Path
 
 import pytest
@@ -168,3 +170,31 @@ def test_the_exit_code_is_the_gates_verdict() -> None:
     assert BuildResult(exit_code=ExitCode.OK).ok
     assert not BuildResult(exit_code=ExitCode.FAILED).ok
     assert not BuildResult(exit_code=ExitCode.ENVIRONMENT).ok
+
+
+def test_a_freshly_scaffolded_project_builds(tmp_path: Path) -> None:
+    """The documented onboarding path, run for real.
+
+    This is the test that was missing when a freshly scaffolded project could not
+    build itself. The cause was a case-sensitive style-name comparison: pandoc's
+    built-in reference document names the style ``heading 1``, so a project with
+    no ``reference.docx`` -- every project immediately after ``init`` -- was found
+    to have no heading at all. That cascaded into four more findings, all of them
+    misleading, and the first thing a new user does is run exactly this.
+
+    It needs Quarto, because a new project has no render to reuse.
+    """
+    require_pipeline()
+    if shutil.which("quarto") is None:
+        pytest.skip("quarto is not on PATH, so a new project cannot be rendered")
+
+    from thesis_refinery.commands.init import run as init_run
+    from thesis_refinery.pipeline import build
+
+    destination = tmp_path / "thesis"
+    assert init_run(argparse.Namespace(dest=str(destination), force=False, title=None)) == ExitCode.OK
+
+    result = build(load(destination))
+
+    assert result.ok, f"a freshly scaffolded project failed at {result.failed_step!r}"
+    assert result.final is not None and result.final.is_file()

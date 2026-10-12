@@ -86,6 +86,20 @@ def test_heading_style_matches_the_localised_spelling() -> None:
     assert DEFAULT_STYLE.heading_style_matches("标题 3", 3)
 
 
+def test_heading_style_matches_ignores_case() -> None:
+    """pandoc's built-in reference document spells the style `heading 1`.
+
+    A project rendered without a `reference.docx` -- every project immediately
+    after `init` -- therefore carries a lower-case name, and a case-sensitive
+    comparison finds no heading at all. That failure cascades: no heading means no
+    front-matter boundary, every paragraph is classified as front matter, and the
+    body check then fails for want of anything to inspect.
+    """
+    assert DEFAULT_STYLE.heading_style_matches("heading 1", 1)
+    assert DEFAULT_STYLE.heading_style_matches("HEADING 2", 2)
+    assert DEFAULT_STYLE.heading_style_matches("Heading 3", 3)
+
+
 def test_heading_style_match_tolerates_surrounding_whitespace() -> None:
     assert DEFAULT_STYLE.heading_style_matches("  Heading 1 ", 1)
 

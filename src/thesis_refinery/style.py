@@ -198,16 +198,32 @@ class StyleSpec:
     def heading_style_matches(self, style_name: str, level: int) -> bool:
         """True when *style_name* is *level*'s heading style, in either script.
 
-        Accepting both spellings is what stops the localisation trap: a stage
-        that scans "until the next Heading 1" silently runs to the end of the
-        document once the style has been renamed to ``标题 1``, and the symptom
-        looks like a broken appendix rather than a broken scan.
+        Two things are tolerated here, and both are real.
+
+        **Script.** A document formatted for a Chinese locale carries ``标题 1``
+        where pandoc wrote ``Heading 1``. A stage that scans "until the next
+        Heading 1" silently runs to the end of the document once the style has
+        been renamed, and the symptom looks like a broken appendix rather than a
+        broken scan.
+
+        **Case.** Style names are compared case-insensitively because Word treats
+        them that way and pandoc's built-in reference document spells them in
+        lower case. A project rendered without a ``reference.docx`` -- which is
+        every project immediately after ``init`` -- therefore has a style named
+        ``heading 1``, and a case-sensitive comparison finds no heading at all.
+
+        The consequence of that second point is worth spelling out, because it is
+        how this was found. No heading means no front-matter boundary, which means
+        every paragraph is classified as front matter, which means the body check
+        finds nothing to check and fails too. One comparison, five misleading
+        findings, and a freshly scaffolded project that cannot build itself.
         """
         candidates = {
             self.heading_styles[level - 1] if level <= len(self.heading_styles) else "",
             self.localized_heading_styles[level - 1] if level <= len(self.localized_heading_styles) else "",
         }
-        return style_name.strip() in {c for c in candidates if c}
+        folded = style_name.strip().casefold()
+        return folded in {candidate.casefold() for candidate in candidates if candidate}
 
     def merged(self, **overrides: Any) -> StyleSpec:
         """A copy with top-level sections replaced by :func:`dataclasses.replace`."""
