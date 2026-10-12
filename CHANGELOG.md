@@ -76,11 +76,10 @@ caught a real leak in this project's own documentation twice.
 
 ### Known gaps
 
-- `stages/frontmatter.py`, `stages/references.py` and `stages/abbreviations.py`
-  are planned and not present. The pipeline reports an absent stage by name and
-  stops, so a checkout without them fails informatively rather than silently
-  doing less than its author believes.
-- `extract-prefix` is declared and not built.
+- `stages/frontmatter.py` and `stages/references.py` are planned and not present.
+  The pipeline reports an absent stage by name and stops, so a checkout without
+  them fails informatively rather than silently doing less than its author
+  believes.
 - `profiles/chemistry` ships two of its three planned modules: the caption run
   shape and the software-term subscripts. The spectra appendix is named in the
   package docstring and deliberately kept out of `__all__`, because a name in

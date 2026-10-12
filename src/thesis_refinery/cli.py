@@ -108,6 +108,7 @@ def _add_extract_prefix_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--source", metavar="PATH", required=True, help="document to cut the front matter from")
     p.add_argument("--out", metavar="PATH", required=True, help="destination .docx")
     p.add_argument("--pages", type=int, default=5, metavar="N", help="how many leading pages to keep (default: 5)")
+    p.add_argument("--quiet", action="store_true", help="print nothing on success")
 
 
 SUBCOMMANDS: tuple[Command, ...] = (
