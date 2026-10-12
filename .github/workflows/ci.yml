@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # The gate that protects everything else. Runs first and alone, so a leak can
+  # never be masked by an unrelated test failure in the matrix below.
+  desensitised:
+    name: desensitisation gate
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Fail if anything identifying leaked into the tree
+        run: python tools/check_desensitized.py
+
+  test:
+    name: ${{ matrix.os }} / py${{ matrix.python }}
+    needs: desensitised
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Lint
+        run: python -m ruff check .
+      - name: Format check
+        run: python -m ruff format --check .
+      - name: Test
+        # `-m "not slow"` keeps the matrix off the Quarto-dependent end-to-end
+        # tests; those run in the dedicated job below.
+        run: python -m pytest -m "not slow"
+      - name: Metadata sanity
+        run: python -c "import thesis_refinery; print(thesis_refinery.__version__)"
+
+  end-to-end:
+    name: demo thesis / end-to-end
+    needs: desensitised
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - uses: quarto-dev/quarto-actions/setup@v2
+      - name: Install
+        run: python -m pip install -e ".[dev]"
+      - name: Build and verify the bundled example
+        # docx rendering does not need the fonts installed: Word documents
+        # reference fonts by name rather than embedding them. Only PDF output
+        # would need them, and PDF is out of scope for CI.
+        run: |
+          python -m thesis_refinery build examples/demo-thesis
+          python -m thesis_refinery verify --docx examples/demo-thesis/manuscript/_outputs/index-final.docx

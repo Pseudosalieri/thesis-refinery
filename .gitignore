@@ -1,0 +1,50 @@
+# ============================================================================
+# thesis-refinery — .gitignore
+#
+# Principle: sources are tracked, build products are not. The only documents
+# that ever get committed are small, hand-authored *inputs* (the demo thesis
+# sources under examples/). Everything a build produces lands in an ignored
+# `_outputs/` directory.
+# ============================================================================
+
+# ---- local baseline bookkeeping (never published) ---------------------------
+# `.baseline/` holds working-tree fingerprints of the repository this project
+# was extracted from. It exists so the extraction can be proven non-destructive.
+.baseline/
+
+# ---- build products & caches ------------------------------------------------
+_outputs/
+build/
+dist/
+*.egg-info/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+.venv/
+venv/
+.env
+
+# ---- Quarto / pandoc intermediates -----------------------------------------
+.quarto/
+**/index.docx
+**/index.pdf
+**/index.tex
+**/index.aux
+**/index.log
+**/index.toc
+**/index.out
+**/index_files/
+
+# ---- Office lock files (WPS/Word leave these behind) ------------------------
+~$*
+~WRL*
+.~lock.*
+
+# ---- OS noise ---------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

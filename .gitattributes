@@ -1,0 +1,39 @@
+# ============================================================================
+# thesis-refinery — .gitattributes
+#
+# Deliberately no Git LFS. The repository tracks only small, hand-authored
+# inputs; build products are ignored. Contributors should not need a special
+# remote or a `git lfs install` step to clone and run the demo.
+# ============================================================================
+
+* text=auto eol=lf
+
+# ---- binary: never touch line endings ---------------------------------------
+*.docx  -text
+*.pdf   -text
+*.png   -text
+*.jpg   -text
+*.jpeg  -text
+*.gif   -text
+*.emf   -text
+*.xlsx  -text
+
+# ---- text: force LF ---------------------------------------------------------
+*.py    text eol=lf
+*.pyi   text eol=lf
+*.md    text eol=lf
+*.qmd   text eol=lf
+*.lua   text eol=lf
+*.yml   text eol=lf
+*.yaml  text eol=lf
+*.json  text eol=lf
+*.toml  text eol=lf
+*.cff   text eol=lf
+*.csl   text eol=lf
+*.bib   text eol=lf
+*.csv   text eol=lf
+*.ps1   text eol=lf
+*.sh    text eol=lf
+
+# ---- keep generated/vendored trees out of diffs and stats -------------------
+examples/**/_outputs/**  linguist-generated=true

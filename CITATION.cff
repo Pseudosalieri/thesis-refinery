@@ -1,0 +1,22 @@
+cff-version: 1.2.0
+message: "If you use this software in academic work, please cite it as below."
+title: "thesis-refinery"
+abstract: >-
+  A build and verification toolchain for an already-written thesis: markdown
+  sources are rendered to .docx, a declarative style specification is applied by
+  scripts, and independent assertions fail the build when the document drifts.
+type: software
+license: AGPL-3.0-only
+repository-code: "https://github.com/OWNER/thesis-refinery"
+url: "https://github.com/OWNER/thesis-refinery"
+version: 0.1.0
+date-released: "2026-10-12"
+keywords:
+  - thesis
+  - dissertation
+  - docx
+  - reproducibility
+  - formatting
+  - verification
+authors:
+  - name: "thesis-refinery contributors"
