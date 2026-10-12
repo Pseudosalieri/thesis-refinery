@@ -93,7 +93,7 @@ SUBCOMMANDS: tuple[Command, ...] = (
     Command("verify", "run the gates; non-zero exit when the document drifts",
             "thesis_refinery.verify.gate:main", _add_verify_args),
     Command("audit", "print a human-readable format report; never fails",
-            "thesis_refinery.commands.audit:run", _add_audit_args),
+            "thesis_refinery.verify.audit:main", _add_audit_args),
     Command("ledger", "build or verify the hash inventory of tracked files",
             "thesis_refinery.commands.ledger:run", _add_ledger_args),
     Command("diff", "diff two .docx versions paragraph by paragraph",
