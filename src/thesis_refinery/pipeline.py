@@ -200,17 +200,57 @@ def render(config: Config, *, quarto: str | None = None, all_formats: bool = Fal
 # ---------------------------------------------------------------------------
 
 
+def _always_enabled(config: Config) -> bool:
+    """The default: a stage that every build runs."""
+    return True
+
+
+def _configured_by_section(name: str) -> Callable[[Config], bool]:
+    """A stage that runs exactly when ``thesis.yml`` gives it a ``stages.<name>`` section."""
+    return lambda config: name in config.stages
+
+
+def _configured_by_frontmatter(config: Config) -> bool:
+    """The front-matter stage runs when the project names a cover document.
+
+    Its input is a project-level path rather than a stage section, because the
+    cover is a fact about the project — and because ``verify`` needs the same path
+    to check the imported pages against their source.
+    """
+    return config.frontmatter_docx is not None
+
+
 @dataclass(frozen=True)
 class Stage:
-    """One transformation between the render and the gates."""
+    """One transformation between the render and the gates.
+
+    ``enabled`` decides whether the stage is part of *this* project's build. The
+    default is "always", which is right for the stage that applies the style
+    specification: a thesis that is not formatted to its specification is not a
+    thesis this tool produced.
+
+    An optional stage is switched on by its own configuration. That keeps the rule
+    this project states everywhere else — a stage that runs either did its work or
+    said why it could not — while letting a project with no abbreviation table leave
+    the abbreviation stage out of its pipeline, rather than failing a build over a
+    feature it never asked for.
+    """
 
     name: str
     summary: str
     module: str
     function: str
+    enabled: Callable[[Config], bool] = _always_enabled
 
 
 STAGES: tuple[Stage, ...] = (
+    Stage(
+        name="abbreviations",
+        summary="rebuild the abbreviation table from its markdown source",
+        module="thesis_refinery.stages.abbreviations",
+        function="apply",
+        enabled=_configured_by_section("abbreviations"),
+    ),
     Stage(
         name="format",
         summary="apply the style specification",
@@ -310,12 +350,23 @@ def build(
             return result
         result.steps_run.append("render")
 
-    for position, stage in enumerate(STAGES):
+    active = [stage for stage in STAGES if stage.enabled(config)]
+    skipped = [stage for stage in STAGES if stage not in active]
+
+    for stage in skipped:
+        _log(f"{stage.name}: not configured, so not part of this build")
+
+    for position, stage in enumerate(active):
         # The last stage writes the documented product path; the others write a
         # file named after themselves, so that a failure has a localisable input.
         # `verify` defaults to the product path, and the README names it, so it
         # has to be the real thing rather than a copy of it.
-        is_last = position == len(STAGES) - 1
+        #
+        # "Last" means last *of the stages this project runs*, not last in the
+        # table: a build that leaves an optional stage out must still produce
+        # `index-final.docx` rather than a file named after whichever stage
+        # happened to come last.
+        is_last = position == len(active) - 1
         destination = (
             config.paths.final_docx
             if is_last

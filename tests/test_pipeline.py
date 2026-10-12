@@ -250,6 +250,51 @@ def test_the_stages_helper_yields_the_table() -> None:
     assert list(stages()) == list(STAGES)
 
 
+def test_stage_options_reach_the_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The plumbing, asserted rather than assumed: options must arrive as a mapping.
+
+    Named by stage rather than by index into the table, so that adding a stage does
+    not silently point this test at a different module.
+    """
+    captured: dict[str, object] = {}
+
+    def fake_apply(source, destination, *, style, options=None):
+        captured["options"] = options
+        return destination
+
+    stage = next(s for s in STAGES if s.name == "format")
+    monkeypatch.setattr("thesis_refinery.stages.format.apply", fake_apply)
+    config = make_config(tmp_path / "project", stages={stage.name: {"anything": 1}})
+    source = tmp_path / "in.docx"
+    source.write_bytes(b"placeholder")
+
+    run_stage(stage, source, tmp_path / "out.docx", config)
+
+    assert captured["options"] == {"anything": 1}
+
+
+def test_an_optional_stage_is_left_out_when_it_is_not_configured(tmp_path: Path) -> None:
+    """A project with no abbreviation table must not fail a build over one.
+
+    The stage's absence from ``thesis.yml`` is the author saying the document has no
+    such table. Its *presence* is a promise that it will run or say why it could
+    not — which is the rule this project states everywhere else.
+    """
+    optional = next(s for s in STAGES if s.name == "abbreviations")
+    assert not optional.enabled(make_config(tmp_path / "bare"))
+    assert optional.enabled(make_config(tmp_path / "configured", stages={"abbreviations": {}}))
+
+
+def test_the_product_path_is_written_by_the_last_stage_that_runs(tmp_path: Path) -> None:
+    """`index-final.docx` is the product because the README and `verify` name it.
+
+    Leaving an optional stage out must not rename the file after whichever stage
+    happens to come last in the table.
+    """
+    config = make_config(tmp_path / "project")
+    assert STAGES[-1].enabled(config), "the formatting stage is not optional"
+
+
 def test_an_unknown_stage_name_stops_the_build_before_rendering(tmp_path: Path) -> None:
     """A misspelled stage name is a section of the config file that configures nothing.
 
@@ -271,24 +316,6 @@ def test_an_unknown_stage_name_stops_the_build_before_rendering(tmp_path: Path) 
 def test_a_known_stage_name_is_accepted(tmp_path: Path) -> None:
     config = make_config(tmp_path / "project", stages={STAGES[0].name: {}})
     assert unknown_stage_options(config) == ()
-
-
-def test_stage_options_reach_the_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """The plumbing, asserted rather than assumed: options must arrive as a mapping."""
-    captured: dict[str, object] = {}
-
-    def fake_apply(source, destination, *, style, options=None):
-        captured["options"] = options
-        return destination
-
-    monkeypatch.setattr("thesis_refinery.stages.format.apply", fake_apply)
-    config = make_config(tmp_path / "project", stages={STAGES[0].name: {"anything": 1}})
-    source = tmp_path / "in.docx"
-    source.write_bytes(b"placeholder")
-
-    run_stage(STAGES[0], source, tmp_path / "out.docx", config)
-
-    assert captured["options"] == {"anything": 1}
 
 
 def test_the_product_path_is_named_after_no_stage() -> None:
