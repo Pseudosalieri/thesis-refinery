@@ -88,8 +88,12 @@ def _add_audit_args(p: argparse.ArgumentParser) -> None:
 
 
 def _add_ledger_args(p: argparse.ArgumentParser) -> None:
-    p.add_argument("action", choices=("build", "verify"), help="rebuild the inventory, or verify hashes against it")
-    p.add_argument("--manifest", metavar="PATH", help="manifest path (default: from thesis.yml)")
+    p.add_argument("action", choices=("build", "verify", "inventory"),
+                   help="build: record digests. verify: compare and fail on any difference. "
+                        "inventory: print a human-readable inventory.")
+    p.add_argument("project", nargs="?", metavar="PROJECT_DIR", help="project root (default: search upwards)")
+    p.add_argument("--manifest", metavar="PATH", help="baseline path (default: <project>/manifest.json)")
+    p.add_argument("--out", metavar="PATH", help="write the inventory or the report here")
 
 
 def _add_diff_args(p: argparse.ArgumentParser) -> None:
@@ -115,7 +119,7 @@ SUBCOMMANDS: tuple[Command, ...] = (
             "thesis_refinery.verify.gate:run", _add_verify_args),
     Command("audit", "print a human-readable format report; never fails",
             "thesis_refinery.verify.audit:run", _add_audit_args),
-    Command("ledger", "build or verify the hash inventory of tracked files",
+    Command("ledger", "build or verify the digest baseline of tracked files",
             "thesis_refinery.commands.ledger:run", _add_ledger_args),
     Command("diff", "diff two .docx versions paragraph by paragraph",
             "thesis_refinery.commands.diff:run", _add_diff_args),

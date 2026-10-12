@@ -18,6 +18,8 @@ import argparse
 import pytest
 
 from thesis_refinery.cli import SUBCOMMANDS, build_parser
+from thesis_refinery.commands.diff import add_arguments as add_diff_arguments
+from thesis_refinery.commands.ledger import add_arguments as add_ledger_arguments
 from thesis_refinery.pipeline import add_build_arguments, add_render_arguments
 from thesis_refinery.verify.audit import add_arguments as add_audit_arguments
 from thesis_refinery.verify.gate import add_arguments as add_verify_arguments
@@ -30,6 +32,8 @@ HANDLER_ATTRIBUTES: dict[str, tuple[str, ...]] = {
     "build": ("project", "quarto", "all_formats", "skip_render", "no_verify"),
     "verify": ("docx", "project_dir", "prefix", "json", "verbose"),
     "audit": ("docx", "project_dir", "prefix", "json", "failures_only", "out"),
+    "ledger": ("action", "project", "manifest", "out"),
+    "diff": ("old", "new", "out"),
 }
 
 # Positional arguments each command needs before it will parse at all.
@@ -44,6 +48,8 @@ MODULE_ARGUMENTS = {
     "build": add_build_arguments,
     "verify": add_verify_arguments,
     "audit": add_audit_arguments,
+    "ledger": add_ledger_arguments,
+    "diff": add_diff_arguments,
 }
 
 
@@ -111,5 +117,5 @@ def test_build_inherits_every_render_option() -> None:
 
 def test_every_handler_attribute_is_covered_by_this_file() -> None:
     """A new command must be added here, or the contract goes unchecked."""
-    handlers = {command.name for command in SUBCOMMANDS if ":" in command.target}
-    assert handlers - {"init", "ledger", "diff", "extract-prefix"} <= set(HANDLER_ATTRIBUTES)
+    wired = {command.name for command in SUBCOMMANDS if ":" in command.target}
+    assert wired - {"init", "extract-prefix"} <= set(HANDLER_ATTRIBUTES)
