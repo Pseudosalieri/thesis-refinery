@@ -73,10 +73,9 @@ executable is resolved in this order:
 3. `tools.quarto` in `thesis.yml`,
 4. `quarto` on `PATH`.
 
-There is deliberately no hard-coded installation path. The pipeline this project
-was extracted from pinned an absolute path to a Quarto install that had since
-been uninstalled; the build only kept working because of a `PATH` fallback, and
-nobody noticed for two months.
+There is deliberately no hard-coded installation path. A pinned absolute path goes
+stale the moment the tool it names is uninstalled or upgraded; the build then keeps
+working only by accident of a `PATH` fallback, and nobody notices for months.
 
 `thesis-refinery verify` and `thesis-refinery audit` do **not** need Quarto. They
 operate on a `.docx` you already have, which is the point: you can adopt the

@@ -8,8 +8,8 @@
 # ============================================================================
 
 # ---- local baseline bookkeeping (never published) ---------------------------
-# `.baseline/` holds working-tree fingerprints of the repository this project
-# was extracted from. It exists so the extraction can be proven non-destructive.
+# `.baseline/` holds working-tree fingerprints taken before this repository was
+# extracted. It exists so the extraction can be proven non-destructive.
 .baseline/
 
 # ---- build products & caches ------------------------------------------------

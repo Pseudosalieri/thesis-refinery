@@ -1,9 +1,8 @@
 """Finding, measuring and resizing drawings.
 
-"Does this paragraph contain a picture?" was written out in eight separate places
-in the pipeline this project came from, in three different spellings of the same
-namespace test. Changing one OOXML predicate meant changing eight sites and
-hoping. Here it is one function.
+"Does this paragraph contain a picture?" is one question, and it used to be asked
+in three different spellings of the same namespace test. Changing one OOXML
+predicate meant changing every site and hoping. Here it is one function.
 
 A related trap: a paragraph can hold a picture two ways. Modern Word writes
 ``w:drawing``; older files and anything produced by WPS may still carry a VML

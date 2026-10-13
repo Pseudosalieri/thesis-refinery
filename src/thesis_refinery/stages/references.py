@@ -1,8 +1,6 @@
 """Reference entries: the typographic conversion the citation style requires.
 
-Ported from the private pipeline this project was extracted from, where it had been
-run against a submitted thesis and where every rule below was found by reading the
-*output* rather than the code.
+Every rule below was found by reading the *output* rather than the code.
 
 **What this stage owns, and what it does not.** It owns characters: the case of a
 surname, ``等`` against ``et al.``, and the italics that mark a journal name. It does

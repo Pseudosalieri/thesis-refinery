@@ -1,7 +1,6 @@
 """Project configuration: one ``thesis.yml`` per thesis.
 
-Three rules, all of them reactions to real failures in the pipeline this project
-was extracted from.
+Three rules, all of them reactions to failures that were observed in practice.
 
 **Unknown keys are errors.** A misspelled key that is silently ignored is a
 setting the author believes is in force and is not. The build then "succeeds"

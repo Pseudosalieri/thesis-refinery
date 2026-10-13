@@ -16,10 +16,10 @@ the project has exactly one way to do each of these things:
 ``fields``         Field codes and ``w:updateFields``
 =================  ========================================================
 
-The pipeline this project was extracted from had eight copies of the same
-namespace literal, five copies of the same ``w()``/``qn()`` helper, and eight
-separate spellings of "does this paragraph contain a picture". Consolidating
-them is why this subpackage exists.
+The problem is the opposite of exotic: the same namespace literal, the same
+``w()``/``qn()`` helper, and the same "does this paragraph contain a picture"
+question, each written out again and again. Consolidating them is why this
+subpackage exists.
 """
 
 from __future__ import annotations

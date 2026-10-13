@@ -1,10 +1,8 @@
 """``extract-prefix``: cut the leading pages of a finished document into a cover file.
 
-Ported from the private pipeline this project was extracted from, where it had been
-used to cut the front pages out of a submitted thesis and then to re-import them as
-the cover of every subsequent build. That round trip is why the two clean-ups below
-are in it at all: they were both found by *opening the result*, not by reading the
-code.
+It cuts the front pages out of a finished document and re-imports them as the cover
+of every subsequent build. That round trip is why the two clean-ups below are in it
+at all: they were both found by *opening the result*, not by reading the code.
 
 **Dangling relationships.** A part that is dropped takes its relationships with it,
 but the parts that pointed *at* it keep their entries. An OPC reader that follows

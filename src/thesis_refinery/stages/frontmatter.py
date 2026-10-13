@@ -1,16 +1,9 @@
 """The cover document, imported at the top of the body, byte for byte.
 
-Ported from the private pipeline this project was extracted from, and the *reason*
-it works the way it does is the most important thing this module carries.
+**A cover outranks every check in the project.** It is imported and never rebuilt,
+because rebuilding a paragraph from its text is what loses run-level formatting.
 
-**An earlier version of that pipeline destroyed a cover page.** It rewrote a
-page-count field, which rebuilt the paragraph from the first run's formatting: the
-run lost its ``w:hint="eastAsia"`` attribute, and a hand-filled placeholder became
-an empty field result, so the page printed blank. The author's verdict was that the
-cover outranks every check in the project, and the pipeline was changed to import the
-cover pages and never touch a character of them.
-
-So the rule this stage follows is: **deep-copy the source's body nodes and never
+The rule this stage follows is: **deep-copy the source's body nodes and never
 rebuild a paragraph from its text.** No field is introduced, no placeholder is
 filled, no text is replaced. What that costs is stated rather than hidden — a
 placeholder stays a placeholder, and the author fills it in Word — and what it buys
