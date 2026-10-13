@@ -11,19 +11,26 @@ decisions; the rest is housekeeping.
 
 ## 1. Identify yourself, or decide not to
 
-| Item | Where | Why it cannot be automated |
-|---|---|---|
-| `https://github.com/OWNER/thesis-refinery` | `pyproject.toml` (`[project.urls]`), `CITATION.cff`, `CHANGELOG.md` | The account is your choice. |
-| Commit author | `git config user.name` / `user.email` in this repository | Every commit currently uses a placeholder identity. Decide whether that is what you want in a public history, and if not, rewrite it **before** the first push. |
-| `CITATION.cff` authors | `CITATION.cff` | A citation needs a real name or a deliberate collective. |
-| Code of Conduct contact | `CODE_OF_CONDUCT.md` (`CONDUCT_CONTACT_PLACEHOLDER`) | An enforcement address that nobody reads is worse than none. |
+Settled for this publication. The decisions are recorded rather than implied, so a
+future maintainer can see what was chosen:
+
+| Item | Decision |
+|---|---|
+| Repository URLs | Point at the published repository in `pyproject.toml` (`[project.urls]`), `CITATION.cff`, and `CHANGELOG.md`. |
+| Commit author / committer | The name is the neutral collective `thesis-refinery contributors`. The address is the repository owner's GitHub noreply address, so commits attribute to the account without publishing a personal name. |
+| `CITATION.cff` authors | The same collective name: a deliberate collective, not a real name. |
+| Code of Conduct contact | A real, monitored address. The placeholder is gone. |
+
+The author was rewritten across the *whole* history before the first push, with
+`git filter-branch --env-filter` over `--all`, which changes the identity fields and
+leaves the original author and committer dates untouched. The equivalent recipes:
 
 ```powershell
-# What the history currently says about you:
-git log --format='%an <%ae>' | Sort-Object -Unique
+# With git-filter-repo installed:
+git filter-repo --mail-map mailmap.txt
 
-# Rewriting the author of every commit, before publishing:
-git filter-repo --mail-map mailmap.txt   # or: git rebase --root --exec 'git commit --amend --no-edit --reset-author'
+# Without it, dates are reset, which is why filter-branch was used instead:
+git rebase --root --exec 'git commit --amend --no-edit --reset-author'
 ```
 
 ## 2. Run the gates one last time
@@ -38,6 +45,9 @@ python -m pytest -q                    # must be green
 python -m ruff check .                 # must be clean
 ```
 
+All three were run and passed for this publication, and the bundled example was
+built and verified as well (section 3).
+
 There is deliberately no `ruff format --check`: the formatter would explode the
 schema-order tables in `docxlib/xmlq.py` onto one element per line. See the note
 in [`CONTRIBUTING.md`](../CONTRIBUTING.md).
@@ -51,28 +61,36 @@ documentation was being written.
 
 ```powershell
 thesis-refinery build examples/demo-thesis
-thesis-refinery verify --docx examples/demo-thesis/manuscript/_outputs/index-final.docx
+thesis-refinery verify -C examples/demo-thesis
 ```
 
 Both must succeed. If they do not, the README's quickstart is a lie, and the
 first thing every visitor does is the quickstart.
 
+`verify` needs `--project-dir` (or `-C`): it looks for `thesis.yml` in the working
+directory and its parents, and from the repository root there is none. Passing only
+`--docx` is not enough, and that is what this section used to say. Walking this
+checklist before the first push is what caught it; leaving it to CI would have made
+the first run red for a reason that has nothing to do with the tool.
+
 ## 4. Repository settings, once it exists
 
-- [ ] Description: *Turn an already-written Word thesis into a reproducible build
+- [x] Description: *Turn an already-written Word thesis into a reproducible build
       artifact, guarded by assertions instead of eyeballs.*
-- [ ] Topics: `thesis`, `dissertation`, `docx`, `python-docx`, `quarto`,
+- [x] Topics: `thesis`, `dissertation`, `docx`, `python-docx`, `quarto`,
       `reproducible-build`, `formatting`, `verification`
-- [ ] Licence detected as **AGPL-3.0** (GitHub reads `LICENSE`; the PEP 639
+- [x] Licence detected as **AGPL-3.0** (GitHub reads `LICENSE`; the PEP 639
       `license` field in `pyproject.toml` agrees with it)
-- [ ] Issues enabled; Discussions optional
+- [x] Issues enabled; Discussions optional
 - [ ] Branch protection on `main`: require the CI checks to pass
 - [ ] **Actions enabled** — `.github/workflows/ci.yml` has never run. Its first
       run is a real event: the `end-to-end` job installs Quarto and builds the
       example, and that path has only been exercised locally.
-- [ ] Secret scanning and Dependabot alerts on
-- [ ] Confirm the desensitisation gate is the **first** job in CI, as written. A
+- [x] Secret scanning and Dependabot alerts on
+- [x] Confirm the desensitisation gate is the **first** job in CI, as written. A
       leak must not be maskable by an unrelated test failure.
+- [ ] Branch protection is deliberately deferred until the first CI run is green;
+      adding it before that blocks the maintainer's own pushes.
 
 ## 5. Workflow files that will run for the first time
 
@@ -103,6 +121,29 @@ Publishing to PyPI is **not** required and is not prepared:
 - [ ] Add `docs/PUBLISH-CHECKLIST.md`'s completed state to `CHANGELOG.md`'s
       `[Unreleased]` section and empty the checklist down to the parts that apply
       to the *next* release.
+
+## 8. What the gate cannot see, checked by hand before the first push
+
+The gate reads the working tree as text, skips anything it cannot decode as UTF-8,
+and never looks at git history. Both gaps were closed by hand for this publication.
+The results are recorded because a green gate says nothing about either:
+
+- **The three tracked binaries were opened, not assumed clean.** `placeholder.png`
+  is a plain grey rectangle; `front-cover.docx` holds only placeholder cover lines;
+  `reference.docx` is a bare style container with no `docProps/core.xml`, so it
+  carries no author or company metadata. No figure, cover photograph, or instrument
+  image is tracked.
+- **The history holds no private material.** `git fsck --unreachable --dangling` is
+  empty, and there are no stashes, extra refs, or old remotes — so nothing deleted is
+  recoverable from what is published.
+- **Commit metadata was audited as well as file contents.** The gate reads files,
+  not messages. The messages carried a reference to a private repository; it was
+  rewritten out of the commits that contained it, together with narrative that only
+  made sense inside the originating pipeline. Per-commit test counts were removed
+  too, since they are stale the moment the next commit lands.
+- **`predecessor` in module docstrings is retained** where it is doing explanatory
+  work. It names no person, institution, or repository, and the provenance
+  statements in `README.md` and `CONTRIBUTING.md` are what define it.
 
 ---
 

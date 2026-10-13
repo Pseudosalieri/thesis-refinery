@@ -7,9 +7,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-### Added
+### Changed
 
-- Nothing yet.
+- Published publicly: the repository URLs and the code-of-conduct contact are
+  filled in.
+- Module docstrings were rewritten to stand on their own, without references to an
+  implementation the reader cannot see.
 
 ## [0.1.0] — 2026-10-12
 
@@ -90,5 +93,5 @@ caught a real leak in this project's own documentation twice.
   the truth and the printed entry is a build-time conversion of it. A check that
   compares the two must ignore the entry lines.
 
-[Unreleased]: https://github.com/OWNER/thesis-refinery/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/OWNER/thesis-refinery/releases/tag/v0.1.0
+[Unreleased]: https://github.com/Pseudosalieri/thesis-refinery/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/Pseudosalieri/thesis-refinery/releases/tag/v0.1.0

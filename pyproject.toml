@@ -58,9 +58,9 @@ dev = [
 thesis-refinery = "thesis_refinery.cli:main"
 
 [project.urls]
-Documentation = "https://github.com/OWNER/thesis-refinery#readme"
-Source = "https://github.com/OWNER/thesis-refinery"
-Issues = "https://github.com/OWNER/thesis-refinery/issues"
+Documentation = "https://github.com/Pseudosalieri/thesis-refinery#readme"
+Source = "https://github.com/Pseudosalieri/thesis-refinery"
+Issues = "https://github.com/Pseudosalieri/thesis-refinery/issues"
 
 # ---------------------------------------------------------------------------
 # Tooling
