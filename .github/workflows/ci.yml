@@ -78,4 +78,4 @@ jobs:
         # would need them, and PDF is out of scope for CI.
         run: |
           python -m thesis_refinery build examples/demo-thesis
-          python -m thesis_refinery verify --docx examples/demo-thesis/manuscript/_outputs/index-final.docx
+          python -m thesis_refinery verify -C examples/demo-thesis
