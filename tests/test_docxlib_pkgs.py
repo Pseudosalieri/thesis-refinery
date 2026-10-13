@@ -253,10 +253,17 @@ def test_save_can_skip_the_guard_when_asked(sample_docx: Path, git_repo: Path) -
         "word/../../escape.xml",
         "/absolute.xml",
         "C:/drive.xml",
-        "",
     ],
 )
 def test_unsafe_member_names_are_rejected(evil_zip, name: str) -> None:
+    """A member whose name is unsafe is refused when the archive is opened.
+
+    The empty name is not parametrised here. Neither Python 3.10 nor 3.11 lets
+    ``zipfile`` write, or even read, a member whose filename is empty, so no
+    archive carrying one can be built with the standard library and the case is
+    asserted through ``write`` below instead. Both paths call the same
+    ``_validate_member_name``.
+    """
     with pytest.raises(UnsafeArchiveError):
         Package(evil_zip(name))
 
@@ -275,6 +282,22 @@ def test_backslash_member_names_are_rejected(sample_docx: Path) -> None:
 def test_unsafe_names_are_rejected_on_write_too(sample_docx: Path) -> None:
     with Package(sample_docx) as package, pytest.raises(UnsafeArchiveError):
         package.write("../escape.xml", b"x")
+
+
+def test_an_empty_member_name_is_rejected(sample_docx: Path) -> None:
+    """The empty name is unsafe on both paths, and reachable from one of them.
+
+    An archive with an empty filename cannot be built portably: ``zipfile``
+    indexes ``filename[-1]`` while writing one on Python <= 3.11, and on 3.10 it
+    raises again while reading the result back. So the rule is asserted where the
+    input can be expressed — ``write`` calls the same ``_validate_member_name``
+    the archive reader does, which is what makes the name unsafe in the first
+    place.
+    """
+    with Package(sample_docx) as package, pytest.raises(
+        UnsafeArchiveError, match="refusing archive member"
+    ):
+        package.write("", b"payload")
 
 
 def test_a_normal_part_name_is_accepted(sample_docx: Path) -> None:

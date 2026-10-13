@@ -93,14 +93,7 @@ def evil_zip(tmp_path: Path):
         digest = hashlib.sha1(name.encode("utf-8")).hexdigest()[:8]
         path = tmp_path / f"evil-{digest}.zip"
         with zipfile.ZipFile(path, "w") as archive:
-            # A ZipInfo is passed explicitly because ``writestr(str, ...)``
-            # indexes ``filename[-1]`` to tell a directory entry from a file
-            # entry, and on an empty name that is an IndexError in Python <=
-            # 3.11. The empty name is one of the cases under test, and a fixture
-            # that raises before the code under test runs tests nothing. The
-            # ``ZipInfo`` constructor does not index the name, so this reaches
-            # the archive on every supported version.
-            archive.writestr(zipfile.ZipInfo(name), b"payload")
+            archive.writestr(name, b"payload")
         return path
 
     return build
