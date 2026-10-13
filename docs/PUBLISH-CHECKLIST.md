@@ -82,25 +82,49 @@ the first run red for a reason that has nothing to do with the tool.
 - [x] Licence detected as **AGPL-3.0** (GitHub reads `LICENSE`; the PEP 639
       `license` field in `pyproject.toml` agrees with it)
 - [x] Issues enabled; Discussions optional
-- [ ] Branch protection on `main`: require the CI checks to pass
-- [ ] **Actions enabled** — `.github/workflows/ci.yml` has never run. Its first
-      run is a real event: the `end-to-end` job installs Quarto and builds the
-      example, and that path has only been exercised locally.
+- [x] Branch protection on `main`: require the CI checks to pass. **Not enabled
+      yet** — see the last item in this list.
+- [x] **Actions enabled, and the first run is green.** It was not green at first;
+      section 5 records what the first run actually found. The `end-to-end` job
+      installs Quarto and builds the example, and it is the only thing that
+      proves the tool works on a machine that is not the author's.
 - [x] Secret scanning and Dependabot alerts on
 - [x] Confirm the desensitisation gate is the **first** job in CI, as written. A
-      leak must not be maskable by an unrelated test failure.
-- [ ] Branch protection is deliberately deferred until the first CI run is green;
-      adding it before that blocks the maintainer's own pushes.
+      leak must not be maskable by an unrelated test failure. It ran first, in
+      seven seconds, and passed.
+- [ ] Branch protection is now unblocked: the first run is green, so requiring
+      the checks can no longer block the maintainer's own pushes. Nobody has
+      turned it on, and turning it on is a deliberate choice rather than a step
+      this checklist performs for you.
 
-## 5. Workflow files that will run for the first time
+## 5. The workflow's first run, and what it found
 
-`.github/workflows/ci.yml` is written but has never executed. Expect to fix:
+`.github/workflows/ci.yml` had never executed before the first push. It has now
+run green, and what it took is worth recording: the things that broke were not the
+ones this section once predicted. The guesses were the Quarto action's version pin
+and the demo's paths; both held. The actual defects were in this repository.
 
-- the Quarto action's version pin, and
-- the end-to-end job's path assumptions, if the demo's layout moved.
+What needed fixing, in the order it surfaced:
 
-Do not disable a failing job to make the first run green. The end-to-end job is
-the only thing that proves the tool works on a machine that is not yours.
+1. **The end-to-end job called `verify` with only `--docx`.** From the repository
+   root there is no `thesis.yml`, so it exited 2 before checking anything. It now
+   passes `-C examples/demo-thesis`. Found by walking section 3 locally.
+2. **The archive-safety test could not build one of its own inputs** on Python
+   3.11 and earlier: `zipfile.writestr` indexes `filename[-1]`, so an empty
+   member name is an `IndexError` before the code under test runs. On 3.10 the
+   standard library cannot represent such a member at all — not even through a
+   `ZipInfo` — so that case is now asserted through `write`, which reaches the
+   same validator.
+
+The Quarto action's version pin held, and so did the demo's paths.
+
+Do not disable a failing job to make a run green, and do not weaken a test to
+make it pass on the oldest interpreter: both of these were real portability
+defects that would have shipped.
+
+The run after those two fixes is green across the whole matrix, ten jobs:
+the desensitisation gate, the end-to-end job, and eight `test` entries covering
+both operating systems and Python 3.10 through 3.13.
 
 ## 6. Decide about packaging
 
